@@ -83,16 +83,12 @@ class EnumAD():
         try:
             if self.ldaps:
                 self.dc_conn = Server(self.server, port=636, use_ssl=True, get_info='ALL')
-                #self.dc_conn = Server(self.server, port=3269, use_ssl=True, get_info='ALL')
                 self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
                 self.conn.bind()
                 self.conn.start_tls()
             else:
-                # This wont work as dumping without adding user/pass however, we dont want to send
-                # username/password without encryption so the option is for now no-existing.
-                # TODO: Create overwrite of the above as param
                 self.dc_conn = Server(self.server, get_info=ALL)
-                self.conn = Connection(self.dc_conn)
+                self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
                 self.conn.bind()
             if self.ldaps:
                  print('[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
