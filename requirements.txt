@@ -277,7 +277,7 @@ tornado==5.1.1
 tqdm==4.30.0
 traitlets==4.3.3
 translationstring==1.3
-Twisted==18.9.0
+Twisted==19.7.0
 txaio==2.10.0
 tzlocal==2.1b1
 u-msgpack-python==2.1
