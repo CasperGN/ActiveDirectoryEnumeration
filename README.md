@@ -34,3 +34,7 @@ optional arguments:
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
 ```
+## Be advised
+
+- I haven't fully tested if SMB connection with `-smb` flag runs encrypted. Use at own risk
+- The output harvested from AD is not yet mapped correctly to th BloodHound format. See code with TODO's
