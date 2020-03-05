@@ -142,6 +142,7 @@ class EnumAD():
         print('[ ' + colored('OK', 'green') +' ] Got all ACL objects')
 
         # Get GPO objects
+        #self.conn.search(self.dc_string[:-1], '(&(|(objectcategory=organizationalUnit)(objectclass=domain))(gplink=*)(flags=*))', attributes=self.ldapProps, search_scope=SUBTREE)
         self.conn.search(self.dc_string[:-1], '(|(&(&(objectcategory=groupPolicyContainer)(flags=*))(name=*)(gpcfilesyspath=*))(objectcategory=organizationalUnit)(objectClass=domain))', attributes=self.ldapProps, search_scope=SUBTREE)
         for entry in self.conn.entries:
             self.gpo.append(entry)
@@ -278,12 +279,10 @@ class EnumAD():
                     "lastlogon": self.splitJsonArr(user['attributes'].get('lastLogon')),
                     "pwdlastset": self.splitJsonArr(user['attributes'].get('pwdLastSet')),
                     "serviceprincipalnames": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
-                    # TODO: Fix
-                    "hasspn": self.splitJsonArr(user['attributes'].get('hasSPN')),
+                    "hasspn": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
                     "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
                     "email": self.splitJsonArr(user['attributes'].get('mail')),
                     "title": self.splitJsonArr(user['attributes'].get('title')),
-                    # TODO: Fix
                     "homedirectory": self.splitJsonArr(user['attributes'].get('homeDirectory')),
                     "description": self.splitJsonArr(user['attributes'].get('description')),
                     "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
@@ -303,16 +302,10 @@ class EnumAD():
                 "Properties": {
                     "highvalue": self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject')), 
                     "description": self.splitJsonArr(gpo['attributes'].get('description')),
-                    "gpcpath": self.splitJsonArr(gpo['attributes'].get('gPLink')) 
+                    "gpcpath": self.splitJsonArr(gpo['attributes'].get('gPCFileSysPath')) 
                 },
                 "Guid": self.splitJsonArr(gpo['attributes'].get('objectGUID')),
-                "Aces": [{
-                        # TODO: Fix
-                        "PrincipalName": "",
-                        "PrincipalType": "",
-                        "RightName": "",
-                        "AceType": ""
-                }]
+                "Aces": self.aceLookup(self.splitJsonArr(gpo['attributes'].get('')))
             })
             idx += 1
         print('[ ' + colored('OK', 'green') +' ] Converted all GPO objects to Json format')
