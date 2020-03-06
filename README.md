@@ -1,8 +1,8 @@
 ## ADE - ActiveDirectoryEnum
 ```
-usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-c COMPUTER] [-s] [-smb]
-                       [-kp] [-bh]
-                       dc
+usage: getAD-Computers [-h] [-o OUT_FILE] [-c COMPUTER] [-s] [-smb] [-kp]
+                       [-bh] [-spn]
+                       dc user
 
         ___        __  _            ____  _                __                   ______                    
        /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
@@ -15,15 +15,15 @@ usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-c COMPUTER] [-s] [-smb
 
 positional arguments:
   dc                    Hostname of the Domain Controller
+  user                  Username of the domain user to query with. The
+                        username has to be domain name either by domain\user
+                        or user@domain.org
 
 optional arguments:
   -h, --help            show this help message and exit
   -o OUT_FILE, --out-file OUT_FILE
                         Path to output file. If no path, CWD is assumed
-                        (default: Prints to stdout)
-  -u USER, --user USER  Username of the domainuser to query with. The username
-                        has to be domain name either by domain\user og
-                        user@domain.org
+                        (default: None)
   -c COMPUTER, --computer COMPUTER
                         Query specific computer (default: None)
   -s, --secure          Try to estalish connection through LDAPS
@@ -33,6 +33,8 @@ optional arguments:
                         Attempt to gather users that does not require Kerberos
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
+  -spn                  Attempt to get all SPNs and perform Kerberoasting. NB:
+                        Does not work yet!
 ```
 
 ## Included attacks
