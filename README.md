@@ -51,6 +51,7 @@ optional arguments:
 - [ ] Output SMB Bruteforce enumetaion properly
 - [X] Get all users with `Kerberos preauthentication` not required and dump hashes
 - [X] Write AD Object dump to raw file
+- [ ] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed
 
 ## Collaboration
 
