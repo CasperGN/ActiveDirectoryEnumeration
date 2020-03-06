@@ -535,13 +535,17 @@ class EnumAD():
 
             hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
 
+        if len(hashes) == 1:
+            print('[ ' + colored('OK', 'green') +' ] Got {0} hash'.format(len(hashes)))
+        else:
+            print('[ ' + colored('OK', 'green') +' ] Got {0} hashes'.format(len(hashes)))
 
-        print('[ ' + colored('OK', 'green') +' ] Got {0} hashes'.format(len(hashes)))
-        with open('jtr_hashes.out', 'w') as f:
-            for h in hashes:
-                f.write(str(h) + '\n')
+        if len(hashes) > 0:
+            with open('jtr_hashes.out', 'w') as f:
+                for h in hashes:
+                    f.write(str(h) + '\n')
 
-        print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to jtr_hashes.out')
+            print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to jtr_hashes.out')
 
 
 
