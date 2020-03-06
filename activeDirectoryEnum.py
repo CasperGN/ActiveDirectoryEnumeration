@@ -156,7 +156,28 @@ class EnumAD():
             self.gpo.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all GPO objects')
 
-    
+
+    '''
+        Since it sometimes is real that the property 'userPassword:' is set
+        we test for it and dump the passwords
+    '''
+    def checkForPW(self, usr_json):
+        passwords = {}
+        for usr in usr_json['users']:
+            if usr['Properties']['userpassword'] is not None:
+                passwords.add(usr['Properties']['name'], usr['Properties']['userpassword'])
+        if len(passwords.keys()) > 0:
+            with open('{0}-clearpw'.format(self.server), 'w') as f:
+                json.dump(json.dumps(passwords, sort_keys=False), f) 
+
+        if len(passwords.keys()) == 1:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
+        else:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
+
+        
+
+
     def splitJsonArr(self, arr):
         if isinstance(arr, list):
             if len(arr) == 1:
@@ -378,6 +399,8 @@ class EnumAD():
             json.dump(gpos_json, f, sort_keys=False)
 
         print('[ ' + colored('OK', 'green') +' ] Wrote all objects to Json format')
+
+        self.checkForPW(users_json)
 
 
     def sortComputers(self):
