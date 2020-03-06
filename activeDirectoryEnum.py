@@ -21,10 +21,14 @@ from pyasn1.type.univ import noValue
 from binascii import hexlify
 import datetime, random
 
+# Thanks SecureAuthCorp for GetUserSPNs.py
+# For SPNUsers enum
+from impacket.krb5.ccache import CCache
+
 
 class EnumAD():
 
-    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, domuser=None, getAll=True, computer=None):
+    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, domuser=None, getAll=True, computer=None):
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
@@ -68,6 +72,9 @@ class EnumAD():
         if kpre:
             self.enumKerbPre()
     
+        if spnEnum:
+            self.enumSPNUsers()
+        
         self.passwd = None
         self.conn.unbind()
 
@@ -537,6 +544,24 @@ class EnumAD():
         print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to jtr_hashes.out')
 
 
+
+    '''
+        Function not finished yet..
+    '''
+    def enumSPNUsers(self):
+        # Build user array
+        users_spn = {
+        }
+
+        idx = 0
+        for entry in self.spn:
+            spn = json.loads(self.spn[idx].entry_to_json())
+            users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
+            idx += 1    
+        print(users_spn)
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='getAD-Computers', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''\
             ___        __  _            ____  _                __                   ______                    
@@ -551,7 +576,7 @@ if __name__ == "__main__":
             '''))
     parser.add_argument('dc', type=str, help='Hostname of the Domain Controller')
     parser.add_argument('-o', '--out-file', type=str, help='Path to output file. If no path, CWD is assumed (default: None)')
-    parser.add_argument('-u', '--user', type=str, help='Username of the domain user to query with. The username has to be domain name either by domain\\user or user@domain.org')
+    parser.add_argument('user', type=str, help='Username of the domain user to query with. The username has to be domain name either by domain\\user or user@domain.org')
     # Not sure if this flag is needed anyway
     #parser.add_argument('-a', '--all', help='Get all Computer Objects from the domain (default: None)', action='store_true')
     parser.add_argument('-c', '--computer', type=str, help='Query specific computer (default: None)')
@@ -559,6 +584,7 @@ if __name__ == "__main__":
     parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares onall computer objects fetched', action='store_true')
     parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
     parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
+    parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting. NB: Does not work yet!', action='store_true')
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -571,10 +597,7 @@ if __name__ == "__main__":
     if args.out_file:
         file_to_write = args.out_file
 
-    if args.user:
-        enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.user)
-    else:
-        enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth)
+    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.user)
 
     # Just print a blank line for output sake
     print('')
