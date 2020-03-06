@@ -164,7 +164,7 @@ class EnumAD():
     def checkForPW(self, usr_json):
         passwords = {}
         for usr in usr_json['users']:
-            if usr['Properties']['userpassword'] is not None:
+            if usr['Properties'].get('userpassword') is not None:
                 passwords.add(usr['Properties']['name'], usr['Properties']['userpassword'])
         if len(passwords.keys()) > 0:
             with open('{0}-clearpw'.format(self.server), 'w') as f:
@@ -195,7 +195,7 @@ class EnumAD():
         }
         for pc in computers_json['computers']:
             for os_version in os_json.keys():
-                if os_version in pc['Properties']['operatingsystem']:
+                if os_version in pc['Properties'].get('operatingsystem'):
                     os_json[os_version].append(pc['Name'])
 
         for key, value in os_json.items():
