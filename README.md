@@ -61,3 +61,7 @@ I only ask that:
 - Test your code
 - Error handling is incorporated
 - Document the feature - both in code but also for potential Wiki page
+
+## Thanks & Acknowledgements
+
+Big thanks to the creators of `Impacket` and `BloodHound`.
