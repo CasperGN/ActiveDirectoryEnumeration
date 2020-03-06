@@ -1,7 +1,6 @@
 ## ADE - ActiveDirectoryEnum
 ```
-usage: getAD-Computers [-h] [-o OUT_FILE] [-c COMPUTER] [-s] [-smb] [-kp]
-                       [-bh] [-spn]
+usage: getAD-Computers [-h] [-o OUT_FILE] [-s] [-smb] [-kp] [-bh] [-spn]
                        dc user
 
         ___        __  _            ____  _                __                   ______                    
@@ -24,8 +23,6 @@ optional arguments:
   -o OUT_FILE, --out-file OUT_FILE
                         Path to output file. If no path, CWD is assumed
                         (default: None)
-  -c COMPUTER, --computer COMPUTER
-                        Query specific computer (default: None)
   -s, --secure          Try to estalish connection through LDAPS
   -smb, --smb           Force enumeration of SMB shares onall computer objects
                         fetched
