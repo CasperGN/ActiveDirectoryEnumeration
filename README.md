@@ -37,7 +37,7 @@ optional arguments:
 ## Be advised
 
 - I haven't fully tested if SMB connection with `-smb` flag runs encrypted. Use at own risk
-- The output harvested from AD is not yet mapped correctly to th BloodHound format. See code with TODO's
+- The output harvested from AD is not yet mapped correctly to th BloodHound format. See code with `TODO's`
 
 ## Features list and status
 
@@ -52,6 +52,7 @@ optional arguments:
 - [X] Get all users with `Kerberos preauthentication` not required and dump hashes
 - [X] Write AD Object dump to raw file
 - [ ] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed
+- [ ] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
 
 
 ## Collaboration
