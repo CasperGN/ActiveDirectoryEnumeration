@@ -98,16 +98,16 @@ class EnumAD():
                 self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
                 self.conn.bind()
             if self.ldaps:
-                 print('[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
+                 print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
             else:
-                print('[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # Too broad a catch. 
         # TODO: Catch individual exceptions instead
         except:
             if self.ldaps:
-                print('[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
-                print('[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.server))
             sys.exit(1)
 
 
@@ -175,7 +175,38 @@ class EnumAD():
         else:
             print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
 
-        
+
+    '''
+        While it is not unusual to find EOL servers hidden or forgotten these 
+        often makes easier targets for lateral movemen, and because of that 
+        we'll dump the lowest registered OS and the respective hosts for easier 
+        enumeration afterwards
+    '''
+    def checkOS(self, computers_json):
+        os_json = {
+                # Should perhaps include older version
+                "Windows XP": [],
+                "Windows Server 2008": [],
+                "Windows 7": [],
+                "Windows Server 2012": [],
+                "Windows 10": [],
+                "Windows Server 2016": [],
+                "Windows Server 2019": []
+        }
+        for pc in computers_json['computers']:
+            for os_version in os_json.keys():
+                if os_version in pc['Properties']['operatingsystem']:
+                    os_json[os_version].append(pc['Name'])
+
+        for key, value in os_json.items():
+            if len(value) == 0:
+                continue
+            with open('{0}-oldest-OS'.format(self.server), 'w') as f:
+                for item in value:
+                    f.write('{0}: {1}\n'.format(key, item))
+                break
+
+        print('[ ' + colored('OK', 'green') +' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
 
 
     def splitJsonArr(self, arr):
@@ -401,6 +432,7 @@ class EnumAD():
         print('[ ' + colored('OK', 'green') +' ] Wrote all objects to Json format')
 
         self.checkForPW(users_json)
+        self.checkOS(computers_json)
 
 
     def sortComputers(self):
@@ -417,6 +449,7 @@ class EnumAD():
 
 
     def enumSMB(self):
+        print('')
         progBar = ProgressBar(widgets=['SMBConnection test: ',Percentage(), Bar(), ETA()], maxval=len(self.smbShareCandidates)).start()
         prog = 0
         try:
@@ -449,6 +482,7 @@ class EnumAD():
             # We reached end of progressbar, continue since we finish below
             pass
         progBar.finish()
+        print('')
 
         if len(self.smbBrowseable.keys()) == 1:
             print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))

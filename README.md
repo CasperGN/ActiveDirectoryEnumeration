@@ -50,7 +50,7 @@ optional arguments:
 - [ ] Enumerate all SPNs for Kerberoasting  
 - [ ] Check servername for service indication (e.g. FTP, MSSQL, Other DB, Exhange etc) to map technical landscape  
 - [ ] Based upon above, enumerate the service indication for default login  
-- [ ] Dump lowest Major OS servers (can we find Win2003, Win2008?)  
+- [X] Dump lowest Major OS servers (can we find Win2003, Win2008?)  
 - [X] Connect through LDAPS
 - [X] Bruteforce enumeration of SMB shares on all computer objects
 - [X] Output SMB Bruteforce enumetaion properly -> Fixed in [9434920](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/9434920fbb729710ebf4034394b69643d445115a)
