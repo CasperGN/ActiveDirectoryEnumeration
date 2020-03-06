@@ -380,7 +380,10 @@ class EnumAD():
             except LDAPKeyError:
                 # No dnsname registered
                 continue
-        print('[ ' + colored('OK', 'green') +' ] Found {0} dnsnames'.format(len(self.smbShareCandidates)))
+        if len(self.smbShareCandidates) == 1:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} dnsname'.format(len(self.smbShareCandidates)))
+        else:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} dnsnames'.format(len(self.smbShareCandidates)))
 
 
     def enumSMB(self):
@@ -417,9 +420,16 @@ class EnumAD():
             pass
         progBar.finish()
 
-        print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
-        for key, value in self.smbBrowseable.items():
-            print(key, value)
+        if len(self.smbBrowseable.keys()) == 1:
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
+        else:
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
+        if len(self.smbBrowseable.keys()) > 0:
+            with open('{0}-open-smb'.format(self.server), 'w') as f:
+                for key, value in self.smbBrowseable.items():
+                    f.write('{0}: {1}'.format(key, value))
+        print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb'.format(self.server))
+
 
 
     def write_file(self):
