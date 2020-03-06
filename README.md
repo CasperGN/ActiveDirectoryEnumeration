@@ -38,3 +38,26 @@ optional arguments:
 
 - I haven't fully tested if SMB connection with `-smb` flag runs encrypted. Use at own risk
 - The output harvested from AD is not yet mapped correctly to th BloodHound format. See code with TODO's
+
+## Features list and status
+
+- [ ] Finish mapping of JSON output to SharpHound3 format  
+- [ ] Enumerate all SPNs for Kerberoasting  
+- [ ] Check servername for service indication (e.g. FTP, MSSQL, Other DB, Exhange etc) to map technical landscape  
+- [ ] Based upon above, enumerate the service indication for default login  
+- [ ] Dump lowest Major OS servers (can we find Win2003, Win2008?)  
+- [X] Connect through LDAPS
+- [X] Bruteforce enumeration of SMB shares on all computer objects
+- [ ] Output SMB Bruteforce enumetaion properly
+- [X] Get all users with `Kerberos preauthentication` not required and dump hashes
+- [X] Write AD Object dump to raw file
+
+## Collaboration
+
+While this project is developed to fit my need, any collaboration is appriciated. Please feel free to fork the project, make changes according to the License agreements and make a Pull Request.
+I only ask that:
+- Keep equivilent naming standard as the base project
+- Keep equivilent syntaxing
+- Test your code
+- Error handling is incorporated
+- Document the feature - both in code but also for potential Wiki page
