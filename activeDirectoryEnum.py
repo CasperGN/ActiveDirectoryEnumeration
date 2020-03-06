@@ -484,7 +484,7 @@ class EnumAD():
         progBar.finish()
         print('')
 
-        if len(self.smbBrowseable.keys()) == 1:
+        if len(self.smbShareCandidates) == 1:
             print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
         else:
             print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
