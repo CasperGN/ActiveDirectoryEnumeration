@@ -47,6 +47,14 @@ optional arguments:
 ## Features list and status
 
 - [ ] Finish mapping of JSON output to SharpHound3 format  
+  - [X] Fix Users (requires testing)
+  - [ ] Fix Computers
+  - [ ] Fix Groups
+  - [ ] Fix OU
+  - [ ] Fix GPO
+  - [ ] Fix Domains
+  - [ ] Fix GPOAdmins
+  - [ ] Fix Sessions
 - [ ] Enumerate all SPNs for Kerberoasting  
 - [ ] Check servername for service indication (e.g. FTP, MSSQL, Other DB, Exhange etc) to map technical landscape  
 - [ ] Based upon above, enumerate the service indication for default login  
