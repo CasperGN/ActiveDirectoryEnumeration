@@ -34,6 +34,12 @@ optional arguments:
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
 ```
+
+## Included attacks
+
+- [x] ASREPRoasting
+- [ ] Kerberoasting
+
 ## Be advised
 
 - I haven't fully tested if SMB connection with `-smb` flag runs encrypted. Use at own risk
@@ -53,6 +59,7 @@ optional arguments:
 - [X] Write AD Object dump to raw file
 - [ ] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed
 - [ ] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
+- [ ] Query all users with an actual password set in the property `userPassword:`
 
 
 ## Collaboration
