@@ -57,10 +57,9 @@ optional arguments:
 - [ ] Output SMB Bruteforce enumetaion properly [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a9ad3e1801661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L421)
 - [X] Get all users with `Kerberos pr&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eauthentication` not required and dump hashes
 - [X] Write AD Object dump to raw file
-- [X] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed - Fixed in https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/ad3e18076b91d0c081502d72fd75d3b284f2e707
+- [X] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed - Fixed in [ad3e180](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/ad3e18076b91d0c081502d72fd75d3b284f2e707)
 - [ ] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
 - [ ] Query all users with an actual password set in the property `userPassword:`
-
 
 ## Collaboration
 
