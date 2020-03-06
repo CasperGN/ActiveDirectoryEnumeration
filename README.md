@@ -48,10 +48,11 @@ optional arguments:
 - [ ] Dump lowest Major OS servers (can we find Win2003, Win2008?)  
 - [X] Connect through LDAPS
 - [X] Bruteforce enumeration of SMB shares on all computer objects
-- [ ] Output SMB Bruteforce enumetaion properly
+- [ ] Output SMB Bruteforce enumetaion properly [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L421)
 - [X] Get all users with `Kerberos preauthentication` not required and dump hashes
 - [X] Write AD Object dump to raw file
 - [ ] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed
+
 
 ## Collaboration
 
