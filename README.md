@@ -1,6 +1,6 @@
 ## ADE - ActiveDirectoryEnum
 ```
-usage: getAD-Computers [-h] [-o OUT_FILE] [-s] [-smb] [-kp] [-bh] [-spn]
+usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-s] [-smb] [-kp] [-bh] [-spn]
                        dc user
 
         ___        __  _            ____  _                __                   ______                    
