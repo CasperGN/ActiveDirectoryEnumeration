@@ -190,7 +190,7 @@ class EnumAD():
         for pc in computers_json['computers']:
             for os_version in os_json.keys():
                 if os_version in pc['Properties'].get('operatingsystem'):
-                    os_json[os_version].append(pc['Name'])
+                    os_json[os_version].append(pc['Properties']['Name'])
 
         for key, value in os_json.items():
             if len(value) == 0:
@@ -228,36 +228,41 @@ class EnumAD():
         if isinstance(memberOf, str):
             # TODO: RightName is incorrect and needs a lookup
             if "Group" in memberOf:
-                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "" }]
+                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "", "IsInherited":False }]
             elif "User" in memberOf:
-                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "" }]
+                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False }]
         elif isinstance(memberOf, list):
             retList = []
             for grp in memberOf:
                 # TODO: RightName is incorrect and needs a lookup
                 if "Group" in grp:
-                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "" })
+                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
                 elif "User" in grp:
-                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "" })
+                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
             return retList
         else:
-            return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "" }]
+            return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
         
-        return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "" }]
-
+        return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
 
 
     def memberLookup(self, member):
-        if isinstance(member, str):
-            if "User" in member:
-                return [{ "MemberName": member.split(',')[0][-3:], "MemberType": "user" }]
-        if isinstance(member, list):
-            retList = []
-            for mem in member:
-                if "User" in mem:
-                    retList.append({ "MemberName": mem.split(',')[0][-3:], "MemberType": "user" })
-        else:
-            return [{ "MemberName": "", "MemberType": "" }]
+        try:
+            if isinstance(member, str):
+                if "User" in member:
+                    memDict = [lst for lst in self.people if str(member) in lst.entry_to_json()]
+                    return [{ "MemberId": str(memDict[0]['objectSid']), "MemberType": "user" }]
+            if isinstance(member, list):
+                retList = []
+                for mem in member:
+                    memDict = [lst for lst in self.people if str(mem) in lst.entry_to_json()]
+                    if "User" in mem:
+                        retList.append({ "MemberId": str(memDict[0]['objectSid']), "MemberType": "user" })
+            else:
+                return [{ "MemberId": "", "MemberType": "" }]
+        except IndexError:
+            # For some remotely unimaginable reason, the member couldnt be found in the people dump
+            return [{ "MemberId": "", "MemberType": "" }]
 
     
     def boolConvert(self, highVal):
@@ -265,6 +270,11 @@ class EnumAD():
             return True
         return False
 
+
+    def hasSPN(self, spnProperty):
+        if spnProperty is not None:
+            return True
+        return False
 
     def outputToBloodhoundJson(self):
         domName = '@{0}'.format(self.server)
@@ -307,13 +317,14 @@ class EnumAD():
             self.group_sid_lookup[self.splitJsonArr(group['attributes'].get('objectSid')).split('-')[-1:][0]] = str(self.splitJsonArr(group['attributes'].get('cn'))) + '@{0}'.format(self.server)
             self.group_sid_dn_lookup[self.splitJsonArr(group['attributes'].get('distinguishedName'))] = self.splitJsonArr(group['attributes'].get('objectSid'))
             groups_json["groups"].append({
-                "Name": self.splitJsonArr(group['attributes'].get('name')) + domName,
                 "Properties": {
                     "highvalue": self.splitJsonArr(group['attributes'].get('isCriticalSystemObject')),
+                    "Name": self.splitJsonArr(group['attributes'].get('name')) + domName,
                     "domain": self.server,
-                    "objectsid": self.splitJsonArr(group['attributes'].get('objectSid')),
-                    "admincount": self.splitJsonArr(group['attributes'].get('adminCount')),
-                    "description": self.splitJsonArr(group['attributes'].get('description'))
+                    "objectid": self.splitJsonArr(group['attributes'].get('objectSid')),
+                    "distinguishedname": self.splitJsonArr(group['attributes'].get('distinguishedName')),
+                    "description": self.splitJsonArr(group['attributes'].get('description')),
+                    "admincount": self.boolConvert(self.splitJsonArr(group['attributes'].get('adminCount')))
                 },
                 "Aces": self.aceLookup(self.splitJsonArr(group['attributes'].get('member'))), 
                 "Members": self.memberLookup(self.splitJsonArr(group['attributes'].get('member'))) 
@@ -325,27 +336,32 @@ class EnumAD():
         for entry in self.computers:
             computer = json.loads(self.computers[idx].entry_to_json())
             computers_json["computers"].append({
-                "Name": self.splitJsonArr(computer['attributes'].get('name')) + '.{0}'.format(self.server),
-                "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID')))),
                 "Properties": {
-                    "objectsid": self.splitJsonArr(computer['attributes'].get('objectSid')),
                     "highvalue": self.splitJsonArr(computer['attributes'].get('isCriticalSystemObject')),
+                    "Name": self.splitJsonArr(computer['attributes'].get('name')) + '.{0}'.format(self.server),
                     "domain": self.server,
-                    # Set to true since it wouldnt return otherwise due to the ldap filter
-                    "enabled": True, 
-                    # TODO: Fix
-                    "unconstraineddelegation": False,
-                    "lastlogon": self.splitJsonArr(computer['attributes'].get('lastLogon')),
-                    "pwdlastset": self.splitJsonArr(computer['attributes'].get('pwdLastSet')),
-                    "serviceprincipalnames": self.splitJsonArr(computer['attributes'].get('servicePrincipalName')),
-                    "operatingsystem": self.splitJsonArr(computer['attributes'].get('operatingSystem')),
+                    "objectid": self.splitJsonArr(computer['attributes'].get('objectSid')),
+                    "distinguishedname": self.splitJsonArr(computer['attributes'].get('distinguishedName')),
                     "description": self.splitJsonArr(computer['attributes'].get('description')),
-            },
-            # TODO: Fix
-            "LocalAdmins": [],
-            "RemoteDesktopUsers": [],
-            "DcomUsers": [],
-            "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo'))})
+                    "enabled": True, 
+                    "serviceprincipalnames": self.splitJsonArr(computer['attributes'].get('servicePrincipalName')),
+                    "lastlogontimestamp": self.splitJsonArr(computer['attributes'].get('lastLogonTimestamp')),
+                    "pwdlastset": self.splitJsonArr(computer['attributes'].get('pwdLastSet')),
+                    "operatingsystem": self.splitJsonArr(computer['attributes'].get('operatingSystem')),
+                    # TODO: Fix
+                    "haslaps": False,
+                    "unconstraineddelegation": False
+                },
+                "AllowedToAct": [],
+                "PrimaryGroupSid": self.sidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID')))),
+                "Sessions": [],
+                "LocalAdmins": [],
+                "RemoteDesktopUsers": [],
+                "DcomUsers": [],
+                "ObjectIdentifier": self.splitJsonArr(computer['attributes'].get('objectSid')),
+                "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo')),
+                "Aces": self.aceLookup(self.splitJsonArr(computer['attributes'].get('memberOf')))
+            })
             idx += 1
         print('[ ' + colored('OK', 'green') +' ] Converted all Computer objects to Json format')
         
@@ -362,7 +378,7 @@ class EnumAD():
                     "lastlogon": self.splitJsonArr(user['attributes'].get('lastLogon')),
                     "pwdlastset": self.splitJsonArr(user['attributes'].get('pwdLastSet')),
                     "serviceprincipalnames": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
-                    "hasspn": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
+                    "hasspn": self.hasSPN(self.splitJsonArr(user['attributes'].get('servicePrincipalName'))),
                     "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
                     "email": self.splitJsonArr(user['attributes'].get('mail')),
                     "title": self.splitJsonArr(user['attributes'].get('title')),
@@ -370,10 +386,23 @@ class EnumAD():
                     "description": self.splitJsonArr(user['attributes'].get('description')),
                     "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
                     "admincount": self.boolConvert(self.splitJsonArr(user['attributes'].get('adminCount'))),
-                    "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
+                    "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
+                    # TODO: Fix all below
+                    "dontreqpreauth": False,
+                    "passwordnotreqd": False,
+                    "highvalue": self.splitJsonArr(user['attributes'].get('isCriticalSystemObject')),
+                    "unconstraineddelegation": False,
+                    "sensitive": False,
+                    "pwdneverexpires": False,
+                    "sidhistory": []
                 },
+                "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
+                "ObjectIdentifier": self.splitJsonArr(user['attributes'].get('objectSid')),
                 "Aces": self.aceLookup(self.splitJsonArr(user['attributes'].get('memberOf'))),
-                "AllowedToDelegate": []
+                # TODO: Fix all below
+                "AllowedToDelegate": [],
+                "SPNTargets": [],
+                "HasSIDHistory": [],
             })
             idx += 1
 
