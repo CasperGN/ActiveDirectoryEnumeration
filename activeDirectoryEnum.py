@@ -3,6 +3,7 @@ from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_O
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
 from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSTimeout
 from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
@@ -449,8 +450,7 @@ class EnumAD():
 
 
     def enumSMB(self):
-        print('')
-        progBar = ProgressBar(widgets=['SMBConnection test: ',Percentage(), Bar(), ETA()], maxval=len(self.smbShareCandidates)).start()
+        progBar = ProgressBar(widgets=['SMBConnection test: ', Percentage(), Bar(), ETA()], maxval=len(self.smbShareCandidates)).start()
         prog = 0
         try:
             for dnsname in self.smbShareCandidates:
@@ -461,38 +461,47 @@ class EnumAD():
                     smbconn = smbconnection.SMBConnection('\\\\' + str(dnsname), str(dnsname), timeout=5)
                     smbconn.login(self.domuser, self.passwd)
                     dirs = smbconn.listShares()
-                    self.smbBrowseable[str(dnsname)] = []
-                    for share in dirs:
-                        try:
-                            path = smbconn.listPath(str(share['shi1_netname']), '*')
-                            self.smbBrowseable[str(dnsname)].append(str(path))
-                        except (SessionError, UnicodeEncodeError):
-                            # Didnt have permission, all good
-                            progBar.update(prog + 1)
-                            prog += 1
+                    self.smbBrowseable[str(dnsname)] = {}
+                    try:
+                        for share in dirs:
+                            self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
+                            try:
+                                path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                                self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
+                            except (SessionError, UnicodeEncodeError) as e:
+                                # Didnt have permission, all good
+                                self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
                             continue
+                    except ValueError as err:
+                        # Reached end of shareBar
+                        pass
                     smbconn.logoff()
                     progBar.update(prog + 1)
                     prog += 1
-                except socket.error as sockErr:
+                except (socket.error, NetBIOSTimeout) as err:
                     progBar.update(prog + 1)
                     prog += 1
                     continue
-        except ValueError:
+        except ValueError as e:
             # We reached end of progressbar, continue since we finish below
             pass
         progBar.finish()
         print('')
 
+        availDirs = []
+        for key, value in self.smbBrowseable.items():
+            for k, v in value.items():
+                if v:
+                    availDirs.append(key)
+
         if len(self.smbShareCandidates) == 1:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         else:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} are browseable by {2}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} with {2} subdirectories/file sare browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         if len(self.smbBrowseable.keys()) > 0:
-            with open('{0}-open-smb'.format(self.server), 'w') as f:
-                for key, value in self.smbBrowseable.items():
-                    f.write('{0}: {1}'.format(key, value))
-        print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb'.format(self.server))
+            with open('{0}-open-smb.json'.format(self.server), 'w') as f:
+                json.dump(self.smbBrowseable, f)
+            print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb'.format(self.server))
 
 
 
