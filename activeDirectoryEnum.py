@@ -266,6 +266,12 @@ class EnumAD():
         else:
             return [{ "MemberName": "", "MemberType": "" }]
 
+    
+    def boolConvert(self, highVal):
+        if highVal == 1:
+            return True
+        return False
+
 
     def outputToBloodhoundJson(self):
         domName = '@{0}'.format(self.server)
@@ -370,7 +376,7 @@ class EnumAD():
                     "homedirectory": self.splitJsonArr(user['attributes'].get('homeDirectory')),
                     "description": self.splitJsonArr(user['attributes'].get('description')),
                     "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
-                    "admincount": self.splitJsonArr(user['attributes'].get('adminCount')),
+                    "admincount": self.boolConvert(self.splitJsonArr(user['attributes'].get('adminCount'))),
                     "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
                 },
                 "Aces": self.aceLookup(self.splitJsonArr(user['attributes'].get('memberOf'))),
