@@ -628,7 +628,7 @@ class EnumAD():
             spn = json.loads(self.spn[idx].entry_to_json())
             users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
             idx += 1    
-        print(users_spn)
+        #print(users_spn)
 
 
 
