@@ -282,28 +282,32 @@ class EnumAD():
             ],
             "meta": {
                 "type": "computers",
-                "count": len(self.computers)
+                "count": len(self.computers),
+                "version": 3
             }
         }
         users_json = { "users": [
             ],
             "meta": {
                 "type": "users",
-                "count": len(self.people)
+                "count": len(self.people),
+                "version": 3
             }
         }
         groups_json = { "groups": [
             ],
             "meta": {
                 "type": "groups",
-                "count": len(self.groups)
+                "count": len(self.groups),
+                "version": 3
             }
         }
         gpos_json = { "gpos": [
             ],
             "meta": {
                 "type": "gpos",
-                "count": len(self.gpo)
+                "count": len(self.gpo),
+                "version": 3
             }
         }
         self.group_sid_lookup = {
