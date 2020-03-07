@@ -48,8 +48,8 @@ optional arguments:
 
 - [ ] Finish mapping of JSON output to SharpHound3 format  
   - [X] Fix Users (requires testing)
-  - [ ] Fix Computers
-  - [ ] Fix Groups
+  - [X] Fix Computers (requires testing)
+  - [X] Fix Groups (requires testing)
   - [ ] Fix OU
   - [ ] Fix GPO
   - [ ] Fix Domains
