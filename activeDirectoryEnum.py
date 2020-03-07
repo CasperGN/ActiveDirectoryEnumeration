@@ -81,9 +81,6 @@ class EnumAD():
         self.passwd = None
         self.conn.unbind()
 
-        ## While testing
-        #sys.exit(0)
-
         if output:
             self.output = output
             self.write_file()
@@ -116,14 +113,8 @@ class EnumAD():
 
     def search(self):
 
-        #
-        #  For Error Handling:
-        #       - LDAPInvalidFilterError
-        #  
-
         # Get computer objects
         self.conn.search(self.dc_string[:-1], '(&(sAMAccountType=805306369)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))', attributes=self.ldapProps, search_scope=SUBTREE)
-        #self.conn.search(self.dc_string[:-1], '(objectCategory=computer)', attributes=self.ldapProps, search_scope=SUBTREE)
         for entry in self.conn.entries:
             self.computers.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all Computer objects')
@@ -385,31 +376,6 @@ class EnumAD():
                 "AllowedToDelegate": []
             })
             idx += 1
-#        for entry in self.people:
-#            user = json.loads(self.people[idx].entry_to_json())
-#            users_json["users"].append({
-#                "Name": self.splitJsonArr(user['attributes'].get('name')) + domName,
-#                "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
-#                "Properties": {
-#                    "domain": self.server,
-#                    "objectsid": self.splitJsonArr(user['attributes'].get('objectSid')),
-#                    "enabled": True,
-#                    "lastlogon": self.splitJsonArr(user['attributes'].get('lastLogon')),
-#                    "pwdlastset": self.splitJsonArr(user['attributes'].get('pwdLastSet')),
-#                    "serviceprincipalnames": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
-#                    "hasspn": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
-#                    "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
-#                    "email": self.splitJsonArr(user['attributes'].get('mail')),
-#                    "title": self.splitJsonArr(user['attributes'].get('title')),
-#                    "homedirectory": self.splitJsonArr(user['attributes'].get('homeDirectory')),
-#                    "description": self.splitJsonArr(user['attributes'].get('description')),
-#                    "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
-#                    "admincount": self.splitJsonArr(user['attributes'].get('adminCount')),
-#                },
-#                "Aces": self.aceLookup(self.splitJsonArr(user['attributes'].get('memberOf'))),
-#                "AllowedToDelegate": []
-#            })
-#            idx += 1
 
         print('[ ' + colored('OK', 'green') +' ] Converted all User objects to Json format')
 
@@ -470,19 +436,15 @@ class EnumAD():
                     smbconn.login(self.domuser, self.passwd)
                     dirs = smbconn.listShares()
                     self.smbBrowseable[str(dnsname)] = {}
-                    try:
-                        for share in dirs:
-                            self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
-                            try:
-                                path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
-                                self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
-                            except (SessionError, UnicodeEncodeError) as e:
-                                # Didnt have permission, all good
-                                self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
+                    for share in dirs:
+                        self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
+                        try:
+                            path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                            self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
+                        except (SessionError, UnicodeEncodeError) as e:
+                            # Didnt have permission, all good
+                            self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
                             continue
-                    except ValueError as err:
-                        # Reached end of shareBar
-                        pass
                     smbconn.logoff()
                     progBar.update(prog + 1)
                     prog += 1
@@ -627,7 +589,6 @@ class EnumAD():
         Function not finished yet..
     '''
     def enumSPNUsers(self):
-        # Build user array
         users_spn = {
         }
 
@@ -652,7 +613,6 @@ class EnumAD():
 
         except KerberosError as err:
             print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
-            # Todo: Fix
             pass
 
 
