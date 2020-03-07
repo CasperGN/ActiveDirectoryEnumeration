@@ -56,6 +56,9 @@ optional arguments:
   - [ ] Fix GPOAdmins
   - [ ] Fix Sessions
 - [ ] Enumerate all SPNs for Kerberoasting  
+  - [X] Get TGT for supplied user (requires testing on non-skew'ed machine)
+  - [ ] Request TGS for each SPN gathered
+  - [ ] Dump all tickets for offline cracking
 - [ ] Check servername for service indication (e.g. FTP, MSSQL, Other DB, Exhange etc) to map technical landscape  
 - [ ] Based upon above, enumerate the service indication for default login  
 - [X] Dump lowest Major OS servers (can we find Win2003, Win2008?) -> Fixed in [75bc987](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/75bc98798df623c5488ea9447e5335f4dcdfb873)
