@@ -146,7 +146,6 @@ class EnumAD():
         print('[ ' + colored('OK', 'green') +' ] Got all ACL objects')
 
         # Get GPO objects
-        #self.conn.search(self.dc_string[:-1], '(&(|(objectcategory=organizationalUnit)(objectclass=domain))(gplink=*)(flags=*))', attributes=self.ldapProps, search_scope=SUBTREE)
         self.conn.search(self.dc_string[:-1], '(|(&(&(objectcategory=groupPolicyContainer)(flags=*))(name=*)(gpcfilesyspath=*))(objectcategory=organizationalUnit)(objectClass=domain))', attributes=self.ldapProps, search_scope=SUBTREE)
         for entry in self.conn.entries:
             self.gpo.append(entry)
@@ -238,6 +237,14 @@ class EnumAD():
             return dn
 
 
+    def gidLookup(self, gid, groups_json):
+        for group in groups_json["groups"]:
+            sid = group["Properties"]["objectid"]
+            if sid.split('-')[-1] == gid:
+                return sid
+        return ""
+
+
     def aceLookup(self, memberOf):
         if isinstance(memberOf, str):
             # TODO: RightName is incorrect and needs a lookup
@@ -255,9 +262,9 @@ class EnumAD():
                     retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
             return retList
         else:
-            return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
+            return [{ "PrincipalSID": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
         
-        return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
+        return [{ "PrincipalSID": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
 
 
     def memberLookup(self, member):
@@ -308,7 +315,16 @@ class EnumAD():
                 belongsTo += sub.split('=')[1]
                 belongsTo += '.'
         return belongsTo
-    
+
+
+    def placedInOU(self, computers, DN):
+        retList = []
+        for computer in computers["computers"]:
+            compDN = computer["Properties"]["distinguishedname"]
+            if DN.split(',') == compDN.split(',')[1:]:
+                retList.append(computer["Properties"]["objectid"])
+        return retList
+
 
     def outputToBloodhoundJson(self):
         domName = '@{0}'.format(self.server)
@@ -408,13 +424,13 @@ class EnumAD():
                     "unconstraineddelegation": False
                 },
                 "AllowedToAct": [],
-                "PrimaryGroupSid": self.sidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID')))),
+                "PrimaryGroupSid": self.gidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID'))), groups_json),
                 "Sessions": [],
                 "LocalAdmins": [],
                 "RemoteDesktopUsers": [],
                 "DcomUsers": [],
                 "ObjectIdentifier": self.splitJsonArr(computer['attributes'].get('objectSid')),
-                "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo')),
+                "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo', [])),
                 "Aces": self.aceLookup(self.splitJsonArr(computer['attributes'].get('memberOf')))
             })
             idx += 1
@@ -442,22 +458,23 @@ class EnumAD():
                     "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
                     "admincount": self.boolConvert(self.splitJsonArr(user['attributes'].get('adminCount'))),
                     "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
-                    # TODO: Fix all below
-                    "dontreqpreauth": False,
-                    "passwordnotreqd": False,
+                    # TODO: Test if key from .get is correct
+                    "dontreqpreauth": self.splitJsonArr(user['attributes'].get('dontRequirePreauth', False)),
+                    # TODO: Test if key from .get is correct
+                    "passwordnotreqd": self.splitJsonArr(user['attributes'].get('msDS-UserPasswordNotRequired', True)),
                     "highvalue": self.boolConvert(self.splitJsonArr(user['attributes'].get('isCriticalSystemObject'))),
                     "unconstraineddelegation": False,
                     "sensitive": False,
-                    "pwdneverexpires": False,
+                    "pwdneverexpires": self.splitJsonArr(user['attributes'].get('msDS-UserPasswordExpiryTimeComputed', False)),
                     "sidhistory": []
                 },
                 "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
                 "ObjectIdentifier": self.splitJsonArr(user['attributes'].get('objectSid')),
                 "Aces": self.aceLookup(self.splitJsonArr(user['attributes'].get('memberOf'))),
                 # TODO: Fix all below
-                "AllowedToDelegate": [],
+                "AllowedToDelegate": self.splitJsonArr(user['attributes'].get('msDS-AllowedToDelegateTo', [])),
                 "SPNTargets": [],
-                "HasSIDHistory": [],
+                "HasSIDHistory": self.splitJsonArr(user['attributes'].get('sIDHistory', [])),
             })
             idx += 1
 
@@ -467,13 +484,16 @@ class EnumAD():
         for entry in self.gpo:
             gpo = json.loads(self.gpo[idx].entry_to_json())
             gpos_json["gpos"].append({
-                "Name": self.splitJsonArr(gpo['attributes'].get('name')) + domName,
                 "Properties": {
                     "highvalue": self.boolConvert(self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject'))), 
+                    "Name": self.splitJsonArr(gpo['attributes'].get('name')) + domName,
+                    "domain": self.memberOfDom(self.splitJsonArr(gpo['attributes'].get('name'))),
+                    "objectid": self.stripGUID(self.splitJsonArr(gpo['attributes'].get('objectGUID'))),
+                    "distinguishedname": self.splitJsonArr(gpo['attributes'].get('distinguishedName')),
                     "description": self.splitJsonArr(gpo['attributes'].get('description')),
                     "gpcpath": self.splitJsonArr(gpo['attributes'].get('gPCFileSysPath')) 
                 },
-                "Guid": self.splitJsonArr(gpo['attributes'].get('objectGUID')),
+                "ObjectIdentifier": self.stripGUID(self.splitJsonArr(gpo['attributes'].get('objectGUID'))),
                 "Aces": self.aceLookup(self.splitJsonArr(gpo['attributes'].get('')))
             })
             idx += 1
@@ -485,18 +505,20 @@ class EnumAD():
             domain_json["domains"].append({
                 "Properties": {
                     "highvalue": self.boolConvert(self.splitJsonArr(domain['attributes'].get('isCriticalSystemObject'))),
-                    "name": self.splitJsonArr(domain['attributes'].get('name')),
-                    "domain": "",
+                    "name": self.memberOfDom(self.splitJsonArr(domain['attributes'].get('name'))),
+                    "domain": self.memberOfDom(self.splitJsonArr(domain['attributes'].get('name'))),
                     "objectid": self.splitJsonArr(domain['attributes'].get('objectSid')),
                     "distinguishedname": self.splitJsonArr(domain['attributes'].get('distinguishedName')),
                     "description": self.splitJsonArr(domain['attributes'].get('description')),
                     "functionallevel": "",
                 },
-                "Users": [],
+                "Users": [sid["Properties"].get("objectid",[]) for sid in users_json["users"]],
                 "Computers": [],
                 "ChildOus": [],
                 "Trusts": [],
                 "Links": [{
+                    "IsEnforced": "",
+                    "Guid": "" #[guid["Properties"].get("objectid",[]) for guid in gpos_json["gpos"]]
                 }],
                 "RemoteDesktopUsers": [],
                 "LocalAdmins": [],
@@ -524,11 +546,11 @@ class EnumAD():
                 },
                 "Links": [{
                     "IsEnforced": False,
-                    "Guid": ""
+                    "Guid": ""#[guid["Properties"].get("objectid",[]) for guid in gpos_json["gpos"]]
                 }],
                 "ACLProtected": "",
                 "Users": [],
-                "Computers": [],
+                "Computers": self.placedInOU(computers_json, self.splitJsonArr(ou['attributes'].get('distinguishedName'))),
                 "ChildOus": [],
                 "RemoteDesktopUsers": [],
                 "LocalAdmins": [],
