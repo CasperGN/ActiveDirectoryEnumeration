@@ -73,6 +73,8 @@ optional arguments:
 - [ ] Search SYSVOL share for any passwords in GPOs and crack them [see](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Active%20Directory%20Attack.md#passwords-in-sysvol--group-policy-preferences)
 - [ ] Try to get SilverTicket
 - [ ] Try to get GoldenTicket
+- [ ] Make `--all` flag that runs all checks
+- [ ] Move smb enum to be the last check
 
 ## Collaboration
 
