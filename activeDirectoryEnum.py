@@ -57,6 +57,8 @@ class EnumAD():
         self.spn = []
         self.acl = []
         self.gpo = []
+        self.domains = []
+        self.ous = []
 
         
         self.bind()
@@ -149,6 +151,18 @@ class EnumAD():
         for entry in self.conn.entries:
             self.gpo.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all GPO objects')
+
+        # Get Domain
+        self.conn.search(self.dc_string[:-1], '(objectclass=domain)', attributes=self.ldapProps, search_scope=SUBTREE)
+        for entry in self.conn.entries:
+            self.domains.append(entry)
+        print('[ ' + colored('OK', 'green') +' ] Got all Domains')
+
+        # Get OUs
+        self.conn.search(self.dc_string[:-1], '(objectclass=organizationalUnit)', attributes=self.ldapProps, search_scope=SUBTREE)
+        for entry in self.conn.entries:
+            self.ous.append(entry)
+        print('[ ' + colored('OK', 'green') +' ] Got all OUs')
 
 
     '''
@@ -268,6 +282,8 @@ class EnumAD():
     def boolConvert(self, highVal):
         if highVal == 1:
             return True
+        if highVal:
+            return True
         return False
 
 
@@ -275,6 +291,24 @@ class EnumAD():
         if spnProperty is not None:
             return True
         return False
+
+
+    def stripGUID(self, guid):
+        retGUID = guid
+        for rep in (('{', ''), ('}', '')):
+            retGUID = retGUID.replace(*rep)
+        return retGUID
+
+
+    def memberOfDom(self, dn):
+        belongsTo = ""
+        dnSplit = dn.split(',')
+        for sub in dnSplit:
+            if 'DC' in sub:
+                belongsTo += sub.split('=')[1]
+                belongsTo += '.'
+        return belongsTo
+    
 
     def outputToBloodhoundJson(self):
         domName = '@{0}'.format(self.server)
@@ -310,6 +344,23 @@ class EnumAD():
                 "version": 3
             }
         }
+        domain_json = { "domains": [
+            ],
+            "meta": {
+                "type": "domains",
+                "count": len(self.domains), 
+                "version": 3
+            }
+        }
+        ou_json = { "ous": [
+            ],
+            "meta": {
+                "type": "ous",
+                "count": len(self.ous),
+                "version": 3
+            }
+        }
+
         self.group_sid_lookup = {
         }
         self.group_sid_dn_lookup = {
@@ -322,7 +373,7 @@ class EnumAD():
             self.group_sid_dn_lookup[self.splitJsonArr(group['attributes'].get('distinguishedName'))] = self.splitJsonArr(group['attributes'].get('objectSid'))
             groups_json["groups"].append({
                 "Properties": {
-                    "highvalue": self.splitJsonArr(group['attributes'].get('isCriticalSystemObject')),
+                    "highvalue": self.boolConvert(self.splitJsonArr(group['attributes'].get('isCriticalSystemObject'))),
                     "Name": self.splitJsonArr(group['attributes'].get('name')) + domName,
                     "domain": self.server,
                     "objectid": self.splitJsonArr(group['attributes'].get('objectSid')),
@@ -341,7 +392,7 @@ class EnumAD():
             computer = json.loads(self.computers[idx].entry_to_json())
             computers_json["computers"].append({
                 "Properties": {
-                    "highvalue": self.splitJsonArr(computer['attributes'].get('isCriticalSystemObject')),
+                    "highvalue": self.boolConvert(self.splitJsonArr(computer['attributes'].get('isCriticalSystemObject'))),
                     "Name": self.splitJsonArr(computer['attributes'].get('name')) + '.{0}'.format(self.server),
                     "domain": self.server,
                     "objectid": self.splitJsonArr(computer['attributes'].get('objectSid')),
@@ -394,7 +445,7 @@ class EnumAD():
                     # TODO: Fix all below
                     "dontreqpreauth": False,
                     "passwordnotreqd": False,
-                    "highvalue": self.splitJsonArr(user['attributes'].get('isCriticalSystemObject')),
+                    "highvalue": self.boolConvert(self.splitJsonArr(user['attributes'].get('isCriticalSystemObject'))),
                     "unconstraineddelegation": False,
                     "sensitive": False,
                     "pwdneverexpires": False,
@@ -418,7 +469,7 @@ class EnumAD():
             gpos_json["gpos"].append({
                 "Name": self.splitJsonArr(gpo['attributes'].get('name')) + domName,
                 "Properties": {
-                    "highvalue": self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject')), 
+                    "highvalue": self.boolConvert(self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject'))), 
                     "description": self.splitJsonArr(gpo['attributes'].get('description')),
                     "gpcpath": self.splitJsonArr(gpo['attributes'].get('gPCFileSysPath')) 
                 },
@@ -428,6 +479,67 @@ class EnumAD():
             idx += 1
         print('[ ' + colored('OK', 'green') +' ] Converted all GPO objects to Json format')
 
+        idx = 0
+        for entry in self.domains:
+            domain = json.loads(self.domains[idx].entry_to_json())
+            domain_json["domains"].append({
+                "Properties": {
+                    "highvalue": self.boolConvert(self.splitJsonArr(domain['attributes'].get('isCriticalSystemObject'))),
+                    "name": self.splitJsonArr(domain['attributes'].get('name')),
+                    "domain": "",
+                    "objectid": self.splitJsonArr(domain['attributes'].get('objectSid')),
+                    "distinguishedname": self.splitJsonArr(domain['attributes'].get('distinguishedName')),
+                    "description": self.splitJsonArr(domain['attributes'].get('description')),
+                    "functionallevel": "",
+                },
+                "Users": [],
+                "Computers": [],
+                "ChildOus": [],
+                "Trusts": [],
+                "Links": [{
+                }],
+                "RemoteDesktopUsers": [],
+                "LocalAdmins": [],
+                "DcomUsers": [],
+                "PSRemoteUsers": [],
+                "ObjectIdentifier": self.splitJsonArr(domain['attributes'].get('objectSid')),
+                "Aces": self.aceLookup(self.splitJsonArr(domain['attributes'].get('')))
+            })
+            idx += 1
+        print('[ ' + colored('OK', 'green') +' ] Converted all Domain objects to Json format')
+
+        idx = 0
+        for entry in self.ous:
+            ou = json.loads(self.ous[idx].entry_to_json())
+            ou_json["ous"].append({
+                "Properties": {
+                    "highvalue": self.boolConvert(self.splitJsonArr(ou['attributes'].get('isCriticalSystemObject'))),
+                    "name": str(self.splitJsonArr(ou['attributes'].get('name'))) + '@{0}'.format(self.server),
+                    "objectid": self.stripGUID(self.splitJsonArr(ou['attributes'].get('objectGUID'))),
+                    "distinguishedname": self.splitJsonArr(ou['attributes'].get('distinguishedName')),
+                    "description": self.splitJsonArr(ou['attributes'].get('description')),
+                    "blocksinheritance": self.boolConvert(""),
+                    #"blocksinheritance": self.splitJsonArr(ou['attributes'].get('')),
+                    "domain": self.memberOfDom(self.splitJsonArr(ou['attributes'].get('distinguishedName')))[:-1],
+                },
+                "Links": [{
+                    "IsEnforced": False,
+                    "Guid": ""
+                }],
+                "ACLProtected": "",
+                "Users": [],
+                "Computers": [],
+                "ChildOus": [],
+                "RemoteDesktopUsers": [],
+                "LocalAdmins": [],
+                "DcomUsers": [],
+                "PSRemoteUsers": [],
+                "ObjectIdentifier": self.stripGUID(self.splitJsonArr(ou['attributes'].get('objectGUID'))),
+                "Aces":  self.aceLookup(self.splitJsonArr(ou['attributes'].get('')))
+            })
+            idx += 1
+        print('[ ' + colored('OK', 'green') +' ] Converted all OUs to Json format')
+
         with open('{0}-computers.json'.format(self.server), 'w') as f:
             json.dump(computers_json, f, sort_keys=False)
         with open('{0}-users.json'.format(self.server), 'w') as f:
@@ -436,6 +548,10 @@ class EnumAD():
             json.dump(groups_json, f, sort_keys=False)
         with open('{0}-gpos.json'.format(self.server), 'w') as f:
             json.dump(gpos_json, f, sort_keys=False)
+        with open('{0}-domain.json'.format(self.server), 'w') as f:
+            json.dump(domain_json, f, sort_keys=False)
+        with open('{0}-ous.json'.format(self.server), 'w') as f:
+            json.dump(ou_json, f, sort_keys=False)
 
         print('[ ' + colored('OK', 'green') +' ] Wrote all objects to Json format')
 
@@ -531,6 +647,14 @@ class EnumAD():
                 f.write("\n")
         with open(str(self.output) + '-gpo', 'w') as f:
             for item in self.gpo:
+                f.write(str(item))
+                f.write("\n")
+        with open(str(self.output) + '-domains', 'w') as f:
+            for item in self.domains:
+                f.write(str(item))
+                f.write("\n")
+        with open(str(self.output) + '-ous', 'w') as f:
+            for item in self.ous:
                 f.write(str(item))
                 f.write("\n")
 
