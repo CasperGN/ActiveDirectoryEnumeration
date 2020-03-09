@@ -67,6 +67,18 @@ class EnumAD():
         if bhout:
             self.outputToBloodhoundJson()
     
+        if kpre:
+            self.enumKerbPre()
+    
+        if spnEnum:
+            self.enumSPNUsers()
+        
+        self.conn.unbind()
+
+        if output:
+            self.output = output
+            self.write_file()
+        
         if enumsmb:
             # Setting variables for further testing and analysis
             self.smbShareCandidates = []
@@ -74,19 +86,8 @@ class EnumAD():
             self.sortComputers()
             self.enumSMB()
 
-        if kpre:
-            self.enumKerbPre()
-    
-        if spnEnum:
-            self.enumSPNUsers()
-        
+        # Lets clear variable now
         self.passwd = None
-        self.conn.unbind()
-
-        if output:
-            self.output = output
-            self.write_file()
-
 
     def bind(self): 
         try:
@@ -788,7 +789,8 @@ class EnumAD():
         # Get TGT for the supplied user
         client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
-            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', self.server, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=self.server)
+            # We need to take the domain from the user@domain since it *could* be a cross-domain user
+            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', self.domuser.split('@')[1], compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=self.domuser.split('@')[1])
 
             TGT = {}
             TGT['KDC_REP'] = tgt
