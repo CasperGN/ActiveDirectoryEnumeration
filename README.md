@@ -74,7 +74,7 @@ optional arguments:
 - [ ] Try to get SilverTicket
 - [ ] Try to get GoldenTicket
 - [ ] Make `--all` flag that runs all checks
-- [ ] Move smb enum to be the last check
+- [X] Move smb enum to be the last check
 
 ## Collaboration
 
