@@ -835,7 +835,6 @@ class EnumAD():
             if len(user_tickets.keys()) > 0:
                 with open('{0}-spn-tickets'.format(self.server), 'w') as f:
                     for key, value in user_tickets.items():
-                        #json.dump(user_tickets, f, sort_keys=False)
                         f.write('{0}:{1}\n'.format(key, value))
                 if len(user_tickets.keys()) == 1:
                     print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
