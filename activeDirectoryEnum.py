@@ -172,7 +172,7 @@ class EnumAD():
         passwords = {}
         for usr in usr_json['users']:
             if usr['Properties'].get('userpassword') is not None:
-                passwords.add(usr['Properties']['name'], usr['Properties']['userpassword'])
+                passwords[usr['Properties']['name']] = usr['Properties']['userpassword']
         if len(passwords.keys()) > 0:
             with open('{0}-clearpw'.format(self.server), 'w') as f:
                 json.dump(json.dumps(passwords, sort_keys=False), f) 
@@ -202,8 +202,12 @@ class EnumAD():
         }
         for pc in computers_json['computers']:
             for os_version in os_json.keys():
-                if os_version in pc['Properties'].get('operatingsystem'):
-                    os_json[os_version].append(pc['Properties']['Name'])
+                try:
+                    if os_version in pc['Properties'].get('operatingsystem'):
+                        os_json[os_version].append(pc['Properties']['Name'])
+                except TypeError:
+                    # pc['Properties'].get('operatingsystem') is of NoneType, just continue
+                    continue
 
         for key, value in os_json.items():
             if len(value) == 0:
@@ -312,8 +316,11 @@ class EnumAD():
         dnSplit = dn.split(',')
         for sub in dnSplit:
             if 'DC' in sub:
-                belongsTo += sub.split('=')[1]
-                belongsTo += '.'
+                try:
+                    belongsTo += sub.split('=')[1]
+                    belongsTo += '.'
+                except IndexError:
+                    continue
         return belongsTo
 
 
