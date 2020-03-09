@@ -31,6 +31,7 @@ optional arguments:
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
   -spn                  Attempt to get all SPNs and perform Kerberoasting
+  --all                 Run all checks
 
 ```
 
