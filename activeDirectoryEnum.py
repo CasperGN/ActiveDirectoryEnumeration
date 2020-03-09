@@ -870,13 +870,20 @@ if __name__ == "__main__":
     parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares onall computer objects fetched', action='store_true')
     parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
     parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
-    parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting. NB: Does not work yet!', action='store_true')
+    parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting', action='store_true')
+    parser.add_argument('--all', help='Run all checks', action='store_true')
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
 
     args = parser.parse_args()
+
+    if args.all:
+        args.smb = True
+        args.kerberos_preauth = True
+        args.bloodhound = True
+        args.spn = True
     
     # Boolean flow control flags
     file_to_write = None

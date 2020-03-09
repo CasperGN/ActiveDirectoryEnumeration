@@ -30,8 +30,8 @@ optional arguments:
                         Attempt to gather users that does not require Kerberos
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
-  -spn                  Attempt to get all SPNs and perform Kerberoasting. NB:
-                        Does not work yet!
+  -spn                  Attempt to get all SPNs and perform Kerberoasting
+
 ```
 
 ## Included attacks
