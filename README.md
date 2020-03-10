@@ -15,8 +15,7 @@ usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-s] [-smb] [-kp] [-bh] [-spn]
 positional arguments:
   dc                    Hostname of the Domain Controller
   user                  Username of the domain user to query with. The
-                        username has to be domain name either by domain\user
-                        or user@domain.org
+                        username has to be domain name as `user@domain.org`
 
 optional arguments:
   -h, --help            show this help message and exit
