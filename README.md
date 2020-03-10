@@ -39,6 +39,7 @@ optional arguments:
 
 - [X] ASREPRoasting
 - [X] Kerberoasting
+- [X] Dump AD as BloodHound JSON files 
 
 ## Be advised
 
@@ -47,15 +48,7 @@ optional arguments:
 
 ## Features list and status
 
-- [ ] Finish mapping of JSON output to SharpHound3 format  
-  - [X] Fix Users (requires testing)
-  - [X] Fix Computers (requires testing)
-  - [X] Fix Groups (requires testing)
-  - [ ] Fix OU
-  - [ ] Fix GPO
-  - [ ] Fix Domains
-  - [ ] Fix GPOAdmins
-  - [ ] Fix Sessions
+- [X] Found external module to handle Bloodhound json files 
 - [X] Enumerate all SPNs for Kerberoasting  
   - [X] Get TGT for supplied user (requires testing on non-skew'ed machine)
   - [X] Request TGS for each SPN gathered
