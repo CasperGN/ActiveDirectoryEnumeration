@@ -611,7 +611,6 @@ class EnumAD():
                 try:
                     # Changing default timeout as shares should respond withing 5 seconds if there is a share
                     # and ACLs make it available to self.user with self.passwd
-                    # TODO: Need to test if below connection is encrypted or not...
                     smbconn = smbconnection.SMBConnection('\\\\' + str(dnsname), str(dnsname), timeout=5)
                     smbconn.login(self.domuser, self.passwd)
                     dirs = smbconn.listShares()
@@ -628,7 +627,10 @@ class EnumAD():
                     smbconn.logoff()
                     progBar.update(prog + 1)
                     prog += 1
-                except (socket.error, NetBIOSTimeout) as err:
+                except (socket.error, NetBIOSTimeout, SessionError) as err:
+                    # TODO: Examine why we sometimes get:
+                    # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
+                    # on healthy shares. It seems to be reported with CIF shares 
                     progBar.update(prog + 1)
                     prog += 1
                     continue
