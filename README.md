@@ -82,4 +82,9 @@ I only ask that:
 
 ## Thanks & Acknowledgements
 
-Big thanks to the creators of `Impacket` and `BloodHound`.
+Big thanks to the creators of:
+`Impacket`
+`BloodHound`
+`BloodHound.py`
+
+Without the above this wrapper was not possible.
