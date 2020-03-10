@@ -177,7 +177,7 @@ class EnumAD():
                 passwords[usr['Properties']['name']] = usr['Properties']['userpassword']
         if len(passwords.keys()) > 0:
             with open('{0}-clearpw'.format(self.server), 'w') as f:
-                json.dump(json.dumps(passwords, sort_keys=False), f) 
+                json.dump(passwords, f, sort_keys=False) 
 
         if len(passwords.keys()) == 1:
             print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
