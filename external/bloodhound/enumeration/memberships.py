@@ -25,10 +25,10 @@
 import logging
 import queue
 import threading
-from bloodhound.ad.utils import ADUtils, AceResolver
-from bloodhound.ad.computer import ADComputer
-from bloodhound.enumeration.acls import AclEnumerator, parse_binary_acl
-from bloodhound.enumeration.outputworker import OutputWorker
+from . .ad.utils import ADUtils, AceResolver
+from . .ad.computer import ADComputer
+from .acls import AclEnumerator, parse_binary_acl
+from .outputworker import OutputWorker
 
 class MembershipEnumerator(object):
     """

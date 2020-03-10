@@ -28,7 +28,7 @@ import threading
 import re
 import dns
 from dns import resolver, reversename
-from bloodhound.ad.structures import LDAP_SID
+from .structures import LDAP_SID
 
 """
 """

@@ -29,12 +29,12 @@ from uuid import UUID
 from dns import resolver
 from ldap3 import ALL_ATTRIBUTES, BASE
 from ldap3.utils.config import _ATTRIBUTES_EXCLUDED_FROM_CHECK
-from ldap3.core.exceptions import LDAPKeyError, LDAPAttributeError, LDAPCursorError, LDAPNoSuchObjectResult
+from ldap3.core.exceptions import LDAPKeyError, LDAPAttributeError, LDAPCursorError, LDAPNoSuchObjectResult, LDAPSocketOpenError
 from ldap3.protocol.microsoft import security_descriptor_control
 # from impacket.krb5.kerberosv5 import KerberosError
-from bloodhound.ad.utils import ADUtils, DNSCache, SidCache, SamCache
-from bloodhound.ad.computer import ADComputer
-from bloodhound.enumeration.objectresolver import ObjectResolver
+from .utils import ADUtils, DNSCache, SidCache, SamCache
+from .computer import ADComputer
+from . .enumeration.objectresolver import ObjectResolver
 from future.utils import itervalues, iteritems, native_str
 
 """
@@ -65,9 +65,15 @@ class ADDC(ADComputer):
         q = self.ad.dnsresolver.query(self.hostname, tcp=self.ad.dns_tcp)
         for r in q:
             ip = r.address
-
-        ldap = self.ad.auth.getLDAPConnection(hostname=ip,
+        try:
+            ldap = self.ad.auth.getLDAPConnection(hostname=ip,
                                               baseDN=self.ad.baseDN, protocol=protocol)
+
+        except LDAPSocketOpenError:
+            # It didnt like ldaps, try ldap
+            ldap = self.ad.auth.getLDAPConnection(hostname=ip,
+                                              baseDN=self.ad.baseDN, protocol='ldap')
+
         if resolver:
             self.resolverldap = ldap
         else:
@@ -114,8 +120,14 @@ class ADDC(ADComputer):
                 except (resolver.NXDOMAIN, resolver.Timeout):
                     continue
 
-        self.gcldap = self.ad.auth.getLDAPConnection(hostname=ip, gc=True,
+        try:
+            self.gcldap = self.ad.auth.getLDAPConnection(hostname=ip, gc=True,
                                                      baseDN=self.ad.baseDN, protocol=protocol)
+        except LDAPSocketOpenError:
+            # It didnt like ldaps, try ldap
+            self.gcldap = self.ad.auth.getLDAPConnection(hostname=ip, gc=True,
+                                                     baseDN=self.ad.baseDN, protocol='ldap')
+
         return self.gcldap is not None
 
     def search(self, search_filter='(objectClass=*)', attributes=None, search_base=None, generator=True, use_gc=False, use_resolver=False, query_sd=False):

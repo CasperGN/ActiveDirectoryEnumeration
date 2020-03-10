@@ -1,4 +1,4 @@
-from bloodhound.lib.cstruct import (
+from . .lib.cstruct import (
     cstruct,
     ctypes,
     dumpstruct,

@@ -27,8 +27,8 @@ import threading
 from multiprocessing import Pool
 from ldap3.utils.conv import escape_filter_chars
 from impacket.uuid import string_to_bin, bin_to_string
-from bloodhound.ad.utils import ADUtils
-from bloodhound.lib import cstruct
+from . .ad.utils import ADUtils
+from . .lib import cstruct
 from io import BytesIO
 import binascii
 import pprint

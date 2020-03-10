@@ -23,11 +23,11 @@
 ####################
 
 import os, sys, logging, argparse, getpass, time, re
-from bloodhound.ad.domain import AD, ADDC
-from bloodhound.ad.authentication import ADAuthentication
-from bloodhound.enumeration.computers import ComputerEnumerator
-from bloodhound.enumeration.memberships import MembershipEnumerator
-from bloodhound.enumeration.domains import DomainEnumerator
+from .ad.domain import AD, ADDC
+from .ad.authentication import ADAuthentication
+from .enumeration.computers import ComputerEnumerator
+from .enumeration.memberships import MembershipEnumerator
+from .enumeration.domains import DomainEnumerator
 
 """
 BloodHound.py is a Python port of BloodHound, designed to run on Linux and Windows.

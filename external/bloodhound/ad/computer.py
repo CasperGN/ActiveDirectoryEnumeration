@@ -29,8 +29,8 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException, RPC_C_AUTHN_LEVEL_PKT_INTE
 from impacket.dcerpc.v5.ndr import NULL
 from impacket.dcerpc.v5.dtypes import RPC_SID, MAXIMUM_ALLOWED
 from impacket import smb3structs
-from bloodhound.ad.utils import ADUtils, AceResolver
-from bloodhound.enumeration.acls import parse_binary_acl
+from .utils import ADUtils, AceResolver
+from . .enumeration.acls import parse_binary_acl
 from impacket.smb3 import SMB3
 from impacket.smb import SMB
 # Try to import exceptions here, if this does not succeed, then impacket version is too old
