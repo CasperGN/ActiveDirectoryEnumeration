@@ -3,7 +3,7 @@ from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_O
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
 from impacket.smbconnection import SessionError
-from impacket.nmb import NetBIOSTimeout
+from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
@@ -620,14 +620,14 @@ class EnumAD():
                         try:
                             path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
                             self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
-                        except (SessionError, UnicodeEncodeError) as e:
+                        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                             # Didnt have permission, all good
                             self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
                             continue
                     smbconn.logoff()
                     progBar.update(prog + 1)
                     prog += 1
-                except (socket.error, NetBIOSTimeout, SessionError) as err:
+                except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError) as err:
                     # TODO: Examine why we sometimes get:
                     # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
                     # on healthy shares. It seems to be reported with CIF shares 
