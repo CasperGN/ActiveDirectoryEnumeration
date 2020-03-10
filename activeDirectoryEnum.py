@@ -382,7 +382,7 @@ class EnumAD():
             users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.server))
         if len(users) == 0:
             print('[ ' + colored('OK', 'green') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
-        elif len(users) == 1
+        elif len(users) == 1:
             print('[ ' + colored('OK', 'yellow') +' ] Found {0} account that does not require Kerberos preauthentication'.format(len(users)))
         else:
             print('[ ' + colored('OK', 'yellow') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
