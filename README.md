@@ -38,6 +38,7 @@ optional arguments:
 
 - [X] ASREPRoasting
 - [X] Kerberoasting
+- [X] Dump AD as BloodHound JSON files 
 
 ## Be advised
 
@@ -46,15 +47,7 @@ optional arguments:
 
 ## Features list and status
 
-- [ ] Finish mapping of JSON output to SharpHound3 format  
-  - [X] Fix Users (requires testing)
-  - [X] Fix Computers (requires testing)
-  - [X] Fix Groups (requires testing)
-  - [ ] Fix OU
-  - [ ] Fix GPO
-  - [ ] Fix Domains
-  - [ ] Fix GPOAdmins
-  - [ ] Fix Sessions
+- [X] Found external module to handle Bloodhound json files 
 - [X] Enumerate all SPNs for Kerberoasting  
   - [X] Get TGT for supplied user (requires testing on non-skew'ed machine)
   - [X] Request TGS for each SPN gathered
@@ -68,12 +61,12 @@ optional arguments:
 - [X] Get all users with `Kerberos peauthentication` not required and dump hashes
 - [X] Write AD Object dump to raw file
 - [X] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed -> Fixed in [ad3e180](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/ad3e18076b91d0c081502d72fd75d3b284f2e707)
-- [ ] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
+- [X] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
 - [X] Query all users with an actual password set in the property `userPassword:` -> Fixed in [f05308b](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/f05308ba4db0d2abda86e15a5145d2ce44c5c889)
 - [ ] Search SYSVOL share for any passwords in GPOs and crack them [see](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Active%20Directory%20Attack.md#passwords-in-sysvol--group-policy-preferences)
 - [ ] Try to get SilverTicket
 - [ ] Try to get GoldenTicket
-- [ ] Make `--all` flag that runs all checks
+- [X] Make `--all` flag that runs all checks
 - [X] Move smb enum to be the last check
 
 ## Collaboration
