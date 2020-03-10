@@ -200,9 +200,11 @@ class EnumAD():
                 json.dump(passwords, f, sort_keys=False) 
 
         if len(passwords.keys()) == 1:
+            print('[ ' + colored('OK', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
+        elif len(passwords.keys()) == 0:
             print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
         else:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
+            print('[ ' + colored('OK', 'yellow') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
 
 
     '''
@@ -257,7 +259,7 @@ class EnumAD():
     @suppressOutput
     def outputToBloodhoundJson(self):
         print('[ ' + colored('OK', 'green') +' ] Generating BloodHound output - this may take time...')
-        opts = argparse.Namespace(dns_tcp=False)
+        opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server)
         auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
         ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
         ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
@@ -380,6 +382,8 @@ class EnumAD():
             users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.server))
         if len(users) == 0:
             print('[ ' + colored('OK', 'green') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
+        elif len(users) == 1
+            print('[ ' + colored('OK', 'yellow') +' ] Found {0} account that does not require Kerberos preauthentication'.format(len(users)))
         else:
             print('[ ' + colored('OK', 'yellow') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
     
@@ -441,9 +445,11 @@ class EnumAD():
             hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
 
         if len(hashes) == 1:
+            print('[ ' + colored('OK', 'yellow') +' ] Got {0} hash'.format(len(hashes)))
+        elif len(hashes) == 0:
             print('[ ' + colored('OK', 'green') +' ] Got {0} hash'.format(len(hashes)))
         else:
-            print('[ ' + colored('OK', 'green') +' ] Got {0} hashes'.format(len(hashes)))
+            print('[ ' + colored('OK', 'yellow') +' ] Got {0} hashes'.format(len(hashes)))
 
         if len(hashes) > 0:
             with open('{0}-jtr-hashes'.format(self.server), 'w') as f:
@@ -514,11 +520,11 @@ class EnumAD():
                     for key, value in user_tickets.items():
                         f.write('{0}:{1}\n'.format(key, value))
                 if len(user_tickets.keys()) == 1:
-                    print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
+                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
                 else:
-                    print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
             else:
-                print('[ ' + colored('OK', 'green') +' ] Wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+                print('[ ' + colored('OK', 'green') +' ] Got {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
 
 
         except KerberosError as err:
