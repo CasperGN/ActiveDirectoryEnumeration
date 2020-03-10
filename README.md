@@ -41,11 +41,6 @@ optional arguments:
 - [X] Kerberoasting
 - [X] Dump AD as BloodHound JSON files 
 
-## Be advised
-
-- I haven't fully tested if SMB connection with `-smb` flag runs encrypted. Use at own risk
-- The output harvested from AD is not yet mapped correctly to th BloodHound format. See code with `TODO's`
-
 ## Features list and status
 
 - [X] Found external module to handle Bloodhound json files 
