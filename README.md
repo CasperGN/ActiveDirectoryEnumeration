@@ -64,6 +64,8 @@ optional arguments:
 - [ ] Try to get GoldenTicket
 - [X] Make `--all` flag that runs all checks
 - [X] Move smb enum to be the last check
+- [ ] Make validation of password before proceeding with ldap connection + querries 
+- [ ] Create better validation of input format to ensure that domain flag is of `domain.local` type and user is `user@domain.local`
 
 ## Collaboration
 
