@@ -422,7 +422,6 @@ class AD(object):
 
         # Create a resolver object
         self.dnsresolver = resolver.Resolver()
-        self.dnsresolver.timeout = 30.0
         if nameserver:
             self.dnsresolver.nameservers = [nameserver]
         # Resolve DNS over TCP?
@@ -491,7 +490,7 @@ class AD(object):
 
         try:
 
-            q = self.dnsresolver.query(query, 'SRV', tcp=self.dns_tcp)
+            q = self.dnsresolver.query(query, 'SRV', tcp=self.dns_tcp, lifetime=30.0)
 
             if str(q.qname).lower().startswith('_ldap._tcp.pdc._msdcs'):
                 ad_domain = str(q.qname).lower()[len(basequery):].strip('.')
