@@ -422,6 +422,7 @@ class AD(object):
 
         # Create a resolver object
         self.dnsresolver = resolver.Resolver()
+        self.dnsresolver.timeout = 30.0
         if nameserver:
             self.dnsresolver.nameservers = [nameserver]
         # Resolve DNS over TCP?
