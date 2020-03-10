@@ -8,8 +8,8 @@ from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
-from contextlib import suppress
-import argparse, textwrap, errno, sys, socket, json, re
+import contextlib
+import argparse, textwrap, errno, sys, socket, json, re, os
 
 # Thanks SecureAuthCorp for GetNPUsers.py
 # For Kerberos preauthentication
@@ -28,6 +28,10 @@ from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
 from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.asn1 import TGS_REP
+
+from external.bloodhound import BloodHound, resolve_collection_methods
+from external.bloodhound.ad.domain import *
+from external.bloodhound.ad.authentication import ADAuthentication
 
 
 class EnumAD():
@@ -64,6 +68,9 @@ class EnumAD():
         
         self.bind()
         self.search()
+        
+        self.checkForPW()
+        self.checkOS()
 
         if bhout:
             self.outputToBloodhoundJson()
@@ -89,6 +96,15 @@ class EnumAD():
 
         # Lets clear variable now
         self.passwd = None
+
+
+    def suppressOutput(func):
+        def wrapper(*a, **ka):
+            with open(os.devnull, 'w') as devnull:
+                with contextlib.redirect_stderr(devnull):
+                    func(*a, **ka)
+        return wrapper
+
 
     def bind(self): 
         try:
@@ -116,6 +132,7 @@ class EnumAD():
 
 
     def search(self):
+       
 
         # Get computer objects
         self.conn.search(self.dc_string[:-1], '(&(sAMAccountType=805306369)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))', attributes=self.ldapProps, search_scope=SUBTREE)
@@ -170,11 +187,14 @@ class EnumAD():
         Since it sometimes is real that the property 'userPassword:' is set
         we test for it and dump the passwords
     '''
-    def checkForPW(self, usr_json):
+    def checkForPW(self):
         passwords = {}
-        for usr in usr_json['users']:
-            if usr['Properties'].get('userpassword') is not None:
-                passwords[usr['Properties']['name']] = usr['Properties']['userpassword']
+        idx = 0
+        for entry in self.people:
+            user = json.loads(self.people[idx].entry_to_json())
+            idx += 1    
+            if user['attributes'].get('userPassword') is not None:
+                passwords[user['attributes']['name']] = user['attributes']['userPassword']
         if len(passwords.keys()) > 0:
             with open('{0}-clearpw'.format(self.server), 'w') as f:
                 json.dump(json.dumps(passwords, sort_keys=False), f) 
@@ -191,7 +211,8 @@ class EnumAD():
         we'll dump the lowest registered OS and the respective hosts for easier 
         enumeration afterwards
     '''
-    def checkOS(self, computers_json):
+    def checkOS(self):
+
         os_json = {
                 # Should perhaps include older version
                 "Windows XP": [],
@@ -202,13 +223,17 @@ class EnumAD():
                 "Windows Server 2016": [],
                 "Windows Server 2019": []
         }
-        for pc in computers_json['computers']:
+        idx = 0
+        for entry in self.computers:
+            computer = json.loads(self.computers[idx].entry_to_json())
+            idx += 1    
+
             for os_version in os_json.keys():
                 try:
-                    if os_version in pc['Properties'].get('operatingsystem'):
-                        os_json[os_version].append(pc['Properties']['Name'])
+                    if os_version in computer['attributes'].get('operatingSystem'):
+                        os_json[os_version].append(computer['attributes']['dNSHostName'])
                 except TypeError:
-                    # pc['Properties'].get('operatingsystem') is of NoneType, just continue
+                    # computer['attributes'].get('operatingSystem') is of NoneType, just continue
                     continue
 
         for key, value in os_json.items():
@@ -228,366 +253,19 @@ class EnumAD():
                 return arr[0]
         return arr
 
-    
-    def sidLookup(self, gsid):
-        try:
-            return self.group_sid_lookup[gsid]
-        except KeyError:
-            return gsid
 
-
-    def sidDNLookup(self, dn):
-        try:
-            return self.group_sid_dn_lookup[dn]
-        except KeyError:
-            return dn
-
-
-    def gidLookup(self, gid, groups_json):
-        for group in groups_json["groups"]:
-            sid = group["Properties"]["objectid"]
-            if sid.split('-')[-1] == gid:
-                return sid
-        return ""
-
-
-    def aceLookup(self, memberOf):
-        if isinstance(memberOf, str):
-            # TODO: RightName is incorrect and needs a lookup
-            if "Group" in memberOf:
-                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "", "IsInherited":False }]
-            elif "User" in memberOf:
-                return [{ "PrincipalSID": self.sidDNLookup(memberOf), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False }]
-        elif isinstance(memberOf, list):
-            retList = []
-            for grp in memberOf:
-                # TODO: RightName is incorrect and needs a lookup
-                if "Group" in grp:
-                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "Group", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
-                elif "User" in grp:
-                    retList.append({ "PrincipalSID": self.sidDNLookup(grp), "PrincipalType": "User", "RightName": "GenericWrite", "AceType": "", "IsInherited":False })
-            return retList
-        else:
-            return [{ "PrincipalSID": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
-        
-        return [{ "PrincipalSID": "", "PrincipalType": "", "RightName": "", "AceType": "", "IsInherited":False }]
-
-
-    def memberLookup(self, member):
-        try:
-            if isinstance(member, str):
-                if "User" in member:
-                    memDict = [lst for lst in self.people if str(member) in lst.entry_to_json()]
-                    return [{ "MemberId": str(memDict[0]['objectSid']), "MemberType": "user" }]
-            if isinstance(member, list):
-                retList = []
-                for mem in member:
-                    memDict = [lst for lst in self.people if str(mem) in lst.entry_to_json()]
-                    if "User" in mem:
-                        retList.append({ "MemberId": str(memDict[0]['objectSid']), "MemberType": "user" })
-            else:
-                return [{ "MemberId": "", "MemberType": "" }]
-        except IndexError:
-            # For some remotely unimaginable reason, the member couldnt be found in the people dump
-            return [{ "MemberId": "", "MemberType": "" }]
-
-    
-    def boolConvert(self, highVal):
-        if highVal == 1:
-            return True
-        if highVal:
-            return True
-        return False
-
-
-    def hasSPN(self, spnProperty):
-        if spnProperty is not None:
-            return True
-        return False
-
-
-    def stripGUID(self, guid):
-        retGUID = guid
-        for rep in (('{', ''), ('}', '')):
-            retGUID = retGUID.replace(*rep)
-        return retGUID
-
-
-    def memberOfDom(self, dn):
-        belongsTo = ""
-        dnSplit = dn.split(',')
-        for sub in dnSplit:
-            if 'DC' in sub:
-                try:
-                    belongsTo += sub.split('=')[1]
-                    belongsTo += '.'
-                except IndexError:
-                    continue
-        return belongsTo
-
-
-    def placedInOU(self, computers, DN):
-        retList = []
-        for computer in computers["computers"]:
-            compDN = computer["Properties"]["distinguishedname"]
-            if DN.split(',') == compDN.split(',')[1:]:
-                retList.append(computer["Properties"]["objectid"])
-        return retList
-
-
+    @suppressOutput
     def outputToBloodhoundJson(self):
-        domName = '@{0}'.format(self.server)
-        computers_json = { "computers": [
-            ],
-            "meta": {
-                "type": "computers",
-                "count": len(self.computers),
-                "version": 3
-            }
-        }
-        users_json = { "users": [
-            ],
-            "meta": {
-                "type": "users",
-                "count": len(self.people),
-                "version": 3
-            }
-        }
-        groups_json = { "groups": [
-            ],
-            "meta": {
-                "type": "groups",
-                "count": len(self.groups),
-                "version": 3
-            }
-        }
-        gpos_json = { "gpos": [
-            ],
-            "meta": {
-                "type": "gpos",
-                "count": len(self.gpo),
-                "version": 3
-            }
-        }
-        domain_json = { "domains": [
-            ],
-            "meta": {
-                "type": "domains",
-                "count": len(self.domains), 
-                "version": 3
-            }
-        }
-        ou_json = { "ous": [
-            ],
-            "meta": {
-                "type": "ous",
-                "count": len(self.ous),
-                "version": 3
-            }
-        }
-
-        self.group_sid_lookup = {
-        }
-        self.group_sid_dn_lookup = {
-        }
-
-        idx = 0
-        for entry in self.groups:
-            group = json.loads(self.groups[idx].entry_to_json())
-            self.group_sid_lookup[self.splitJsonArr(group['attributes'].get('objectSid')).split('-')[-1:][0]] = str(self.splitJsonArr(group['attributes'].get('cn'))) + '@{0}'.format(self.server)
-            self.group_sid_dn_lookup[self.splitJsonArr(group['attributes'].get('distinguishedName'))] = self.splitJsonArr(group['attributes'].get('objectSid'))
-            groups_json["groups"].append({
-                "Properties": {
-                    "highvalue": self.boolConvert(self.splitJsonArr(group['attributes'].get('isCriticalSystemObject'))),
-                    "Name": self.splitJsonArr(group['attributes'].get('name')) + domName,
-                    "domain": self.server,
-                    "objectid": self.splitJsonArr(group['attributes'].get('objectSid')),
-                    "distinguishedname": self.splitJsonArr(group['attributes'].get('distinguishedName')),
-                    "description": self.splitJsonArr(group['attributes'].get('description')),
-                    "admincount": self.boolConvert(self.splitJsonArr(group['attributes'].get('adminCount')))
-                },
-                "Aces": self.aceLookup(self.splitJsonArr(group['attributes'].get('member'))), 
-                "Members": self.memberLookup(self.splitJsonArr(group['attributes'].get('member'))) 
-            })
-            idx += 1
-        print('[ ' + colored('OK', 'green') +' ] Converted all Group objects to Json format')
-
-        idx = 0
-        for entry in self.computers:
-            computer = json.loads(self.computers[idx].entry_to_json())
-            computers_json["computers"].append({
-                "Properties": {
-                    "highvalue": self.boolConvert(self.splitJsonArr(computer['attributes'].get('isCriticalSystemObject'))),
-                    "Name": self.splitJsonArr(computer['attributes'].get('name')) + '.{0}'.format(self.server),
-                    "domain": self.server,
-                    "objectid": self.splitJsonArr(computer['attributes'].get('objectSid')),
-                    "distinguishedname": self.splitJsonArr(computer['attributes'].get('distinguishedName')),
-                    "description": self.splitJsonArr(computer['attributes'].get('description')),
-                    "enabled": True, 
-                    "serviceprincipalnames": self.splitJsonArr(computer['attributes'].get('servicePrincipalName')),
-                    "lastlogontimestamp": self.splitJsonArr(computer['attributes'].get('lastLogonTimestamp')),
-                    "pwdlastset": self.splitJsonArr(computer['attributes'].get('pwdLastSet')),
-                    "operatingsystem": self.splitJsonArr(computer['attributes'].get('operatingSystem')),
-                    # TODO: Fix
-                    "haslaps": False,
-                    "unconstraineddelegation": False
-                },
-                "AllowedToAct": [],
-                "PrimaryGroupSid": self.gidLookup(str(self.splitJsonArr(computer['attributes'].get('primaryGroupID'))), groups_json),
-                "Sessions": [],
-                "LocalAdmins": [],
-                "RemoteDesktopUsers": [],
-                "DcomUsers": [],
-                "ObjectIdentifier": self.splitJsonArr(computer['attributes'].get('objectSid')),
-                "AllowedToDelegate": self.splitJsonArr(computer['attributes'].get('msds-allowedToDelegateTo', [])),
-                "Aces": self.aceLookup(self.splitJsonArr(computer['attributes'].get('memberOf')))
-            })
-            idx += 1
-        print('[ ' + colored('OK', 'green') +' ] Converted all Computer objects to Json format')
-        
-        idx = 0
-        for entry in self.people:
-            user = json.loads(self.people[idx].entry_to_json())
-            users_json["users"].append({
-                "Properties": {
-                    "name": self.splitJsonArr(user['attributes'].get('name')) + domName,
-                    "domain": self.server,
-                    "objectid": self.splitJsonArr(user['attributes'].get('objectSid')),
-                    "distinguishedname": self.splitJsonArr(user['attributes'].get('distinguishedName')),
-                    "enabled": True,
-                    "lastlogon": self.splitJsonArr(user['attributes'].get('lastLogon')),
-                    "pwdlastset": self.splitJsonArr(user['attributes'].get('pwdLastSet')),
-                    "serviceprincipalnames": self.splitJsonArr(user['attributes'].get('servicePrincipalName')),
-                    "hasspn": self.hasSPN(self.splitJsonArr(user['attributes'].get('servicePrincipalName'))),
-                    "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
-                    "email": self.splitJsonArr(user['attributes'].get('mail')),
-                    "title": self.splitJsonArr(user['attributes'].get('title')),
-                    "homedirectory": self.splitJsonArr(user['attributes'].get('homeDirectory')),
-                    "description": self.splitJsonArr(user['attributes'].get('description')),
-                    "userpassword": self.splitJsonArr(user['attributes'].get('userPassword')),
-                    "admincount": self.boolConvert(self.splitJsonArr(user['attributes'].get('adminCount'))),
-                    "displayname": self.splitJsonArr(user['attributes'].get('displayName')),
-                    # TODO: Test if key from .get is correct
-                    "dontreqpreauth": self.splitJsonArr(user['attributes'].get('dontRequirePreauth', False)),
-                    # TODO: Test if key from .get is correct
-                    "passwordnotreqd": self.splitJsonArr(user['attributes'].get('msDS-UserPasswordNotRequired', True)),
-                    "highvalue": self.boolConvert(self.splitJsonArr(user['attributes'].get('isCriticalSystemObject'))),
-                    "unconstraineddelegation": False,
-                    "sensitive": False,
-                    "pwdneverexpires": self.splitJsonArr(user['attributes'].get('msDS-UserPasswordExpiryTimeComputed', False)),
-                    "sidhistory": []
-                },
-                "PrimaryGroup": self.sidLookup(str(self.splitJsonArr(user['attributes'].get('primaryGroupID')))), 
-                "ObjectIdentifier": self.splitJsonArr(user['attributes'].get('objectSid')),
-                "Aces": self.aceLookup(self.splitJsonArr(user['attributes'].get('memberOf'))),
-                # TODO: Fix all below
-                "AllowedToDelegate": self.splitJsonArr(user['attributes'].get('msDS-AllowedToDelegateTo', [])),
-                "SPNTargets": [],
-                "HasSIDHistory": self.splitJsonArr(user['attributes'].get('sIDHistory', [])),
-            })
-            idx += 1
-
-        print('[ ' + colored('OK', 'green') +' ] Converted all User objects to Json format')
-
-        idx = 0
-        for entry in self.gpo:
-            gpo = json.loads(self.gpo[idx].entry_to_json())
-            gpos_json["gpos"].append({
-                "Properties": {
-                    "highvalue": self.boolConvert(self.splitJsonArr(gpo['attributes'].get('isCriticalSystemObject'))), 
-                    "Name": self.splitJsonArr(gpo['attributes'].get('name')) + domName,
-                    "domain": self.memberOfDom(self.splitJsonArr(gpo['attributes'].get('name'))),
-                    "objectid": self.stripGUID(self.splitJsonArr(gpo['attributes'].get('objectGUID'))),
-                    "distinguishedname": self.splitJsonArr(gpo['attributes'].get('distinguishedName')),
-                    "description": self.splitJsonArr(gpo['attributes'].get('description')),
-                    "gpcpath": self.splitJsonArr(gpo['attributes'].get('gPCFileSysPath')) 
-                },
-                "ObjectIdentifier": self.stripGUID(self.splitJsonArr(gpo['attributes'].get('objectGUID'))),
-                "Aces": self.aceLookup(self.splitJsonArr(gpo['attributes'].get('')))
-            })
-            idx += 1
-        print('[ ' + colored('OK', 'green') +' ] Converted all GPO objects to Json format')
-
-        idx = 0
-        for entry in self.domains:
-            domain = json.loads(self.domains[idx].entry_to_json())
-            domain_json["domains"].append({
-                "Properties": {
-                    "highvalue": self.boolConvert(self.splitJsonArr(domain['attributes'].get('isCriticalSystemObject'))),
-                    "name": self.memberOfDom(self.splitJsonArr(domain['attributes'].get('name'))),
-                    "domain": self.memberOfDom(self.splitJsonArr(domain['attributes'].get('name'))),
-                    "objectid": self.splitJsonArr(domain['attributes'].get('objectSid')),
-                    "distinguishedname": self.splitJsonArr(domain['attributes'].get('distinguishedName')),
-                    "description": self.splitJsonArr(domain['attributes'].get('description')),
-                    "functionallevel": "",
-                },
-                "Users": [sid["Properties"].get("objectid",[]) for sid in users_json["users"]],
-                "Computers": [],
-                "ChildOus": [],
-                "Trusts": [],
-                "Links": [{
-                    "IsEnforced": "",
-                    "Guid": "" #[guid["Properties"].get("objectid",[]) for guid in gpos_json["gpos"]]
-                }],
-                "RemoteDesktopUsers": [],
-                "LocalAdmins": [],
-                "DcomUsers": [],
-                "PSRemoteUsers": [],
-                "ObjectIdentifier": self.splitJsonArr(domain['attributes'].get('objectSid')),
-                "Aces": self.aceLookup(self.splitJsonArr(domain['attributes'].get('')))
-            })
-            idx += 1
-        print('[ ' + colored('OK', 'green') +' ] Converted all Domain objects to Json format')
-
-        idx = 0
-        for entry in self.ous:
-            ou = json.loads(self.ous[idx].entry_to_json())
-            ou_json["ous"].append({
-                "Properties": {
-                    "highvalue": self.boolConvert(self.splitJsonArr(ou['attributes'].get('isCriticalSystemObject'))),
-                    "name": str(self.splitJsonArr(ou['attributes'].get('name'))) + '@{0}'.format(self.server),
-                    "objectid": self.stripGUID(self.splitJsonArr(ou['attributes'].get('objectGUID'))),
-                    "distinguishedname": self.splitJsonArr(ou['attributes'].get('distinguishedName')),
-                    "description": self.splitJsonArr(ou['attributes'].get('description')),
-                    "blocksinheritance": self.boolConvert(""),
-                    #"blocksinheritance": self.splitJsonArr(ou['attributes'].get('')),
-                    "domain": self.memberOfDom(self.splitJsonArr(ou['attributes'].get('distinguishedName')))[:-1],
-                },
-                "Links": [{
-                    "IsEnforced": False,
-                    "Guid": ""#[guid["Properties"].get("objectid",[]) for guid in gpos_json["gpos"]]
-                }],
-                "ACLProtected": "",
-                "Users": [],
-                "Computers": self.placedInOU(computers_json, self.splitJsonArr(ou['attributes'].get('distinguishedName'))),
-                "ChildOus": [],
-                "RemoteDesktopUsers": [],
-                "LocalAdmins": [],
-                "DcomUsers": [],
-                "PSRemoteUsers": [],
-                "ObjectIdentifier": self.stripGUID(self.splitJsonArr(ou['attributes'].get('objectGUID'))),
-                "Aces":  self.aceLookup(self.splitJsonArr(ou['attributes'].get('')))
-            })
-            idx += 1
-        print('[ ' + colored('OK', 'green') +' ] Converted all OUs to Json format')
-
-        with open('{0}-computers.json'.format(self.server), 'w') as f:
-            json.dump(computers_json, f, sort_keys=False)
-        with open('{0}-users.json'.format(self.server), 'w') as f:
-            json.dump(users_json, f, sort_keys=False)
-        with open('{0}-groups.json'.format(self.server), 'w') as f:
-            json.dump(groups_json, f, sort_keys=False)
-        with open('{0}-gpos.json'.format(self.server), 'w') as f:
-            json.dump(gpos_json, f, sort_keys=False)
-        with open('{0}-domain.json'.format(self.server), 'w') as f:
-            json.dump(domain_json, f, sort_keys=False)
-        with open('{0}-ous.json'.format(self.server), 'w') as f:
-            json.dump(ou_json, f, sort_keys=False)
-
-        print('[ ' + colored('OK', 'green') +' ] Wrote all objects to Json format')
-
-        self.checkForPW(users_json)
-        self.checkOS(computers_json)
+        print('[ ' + colored('OK', 'green') +' ] Generating BloodHound output - this may take time...')
+        opts = argparse.Namespace(dns_tcp=False)
+        auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
+        ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
+        ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+        bloodhound = BloodHound(ad)
+        bloodhound.connect()
+        collection = resolve_collection_methods('Session,Trusts,ACL,DCOM,RDP,PSRemote')
+        bloodhound.run(collect=collection, num_workers=40, disable_pooling=False)
+        print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
 
 
     def sortComputers(self):
@@ -773,10 +451,6 @@ class EnumAD():
             print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.server))
 
 
-
-    '''
-        Function not finished yet..
-    '''
     def enumSPNUsers(self):
         users_spn = {
         }
@@ -836,7 +510,6 @@ class EnumAD():
             if len(user_tickets.keys()) > 0:
                 with open('{0}-spn-tickets'.format(self.server), 'w') as f:
                     for key, value in user_tickets.items():
-                        #json.dump(user_tickets, f, sort_keys=False)
                         f.write('{0}:{1}\n'.format(key, value))
                 if len(user_tickets.keys()) == 1:
                     print('[ ' + colored('OK', 'yellow') +' ] Wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
@@ -849,7 +522,6 @@ class EnumAD():
         except KerberosError as err:
             print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
             pass
-
 
 
 if __name__ == "__main__":
