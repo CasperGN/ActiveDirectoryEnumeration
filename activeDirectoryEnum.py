@@ -302,7 +302,8 @@ class EnumAD():
                             self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
                         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                             # Didnt have permission, all good
-                            self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
+                            # Im second guessing the below adding to the JSON file as we're only interested in the listable directories really
+                            #self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
                             continue
                     smbconn.logoff()
                     progBar.update(prog + 1)
