@@ -548,7 +548,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--out-file', type=str, help='Path to output file. If no path, CWD is assumed (default: None)')
     parser.add_argument('user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
     parser.add_argument('-s', '--secure', help='Try to estalish connection through LDAPS', action='store_true')
-    parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares onall computer objects fetched', action='store_true')
+    parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares on all computer objects fetched', action='store_true')
     parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
     parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
     parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting', action='store_true')

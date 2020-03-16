@@ -23,7 +23,7 @@ optional arguments:
                         Path to output file. If no path, CWD is assumed
                         (default: None)
   -s, --secure          Try to estalish connection through LDAPS
-  -smb, --smb           Force enumeration of SMB shares onall computer objects
+  -smb, --smb           Force enumeration of SMB shares on all computer objects
                         fetched
   -kp, --kerberos_preauth
                         Attempt to gather users that does not require Kerberos
