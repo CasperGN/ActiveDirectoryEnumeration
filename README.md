@@ -34,6 +34,19 @@ optional arguments:
 
 ```
 
+## Install
+
+Run installation through pip3:
+```
+pip3 install .
+```
+Since it is not yet distributed through pip packages yet this is the way, for now.
+The script can now be called as a module or be imported:
+
+```
+python3 -m activeDirectoryEnum 
+```
+
 ## Included attacks
 
 - [X] ASREPRoasting
