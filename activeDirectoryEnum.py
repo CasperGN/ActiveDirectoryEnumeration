@@ -256,7 +256,6 @@ class EnumAD():
 
 
     def outputToBloodhoundJson(self):
-        print(socket.gethostbyname_ex(self.server))
         print('[ ' + colored('OK', 'green') +' ] Generating BloodHound output - this may take time...')
         try:
             with self.suppressOutput():
