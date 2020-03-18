@@ -5,7 +5,7 @@ with open('README.md', 'r') as desc:
 
 setuptools.setup(
         name = 'ActiveDirectoryEnum',
-        version = '0.1.0',
+        version = '0.1.1',
         author = 'Casper G. Nielsen',
         author_email = 'whopsec@protonmail.com',
         description = 'Enumerate Active Directory with standard vectors',
