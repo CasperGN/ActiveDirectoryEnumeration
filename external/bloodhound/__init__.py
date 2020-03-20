@@ -43,11 +43,9 @@ class BloodHound(object):
     def connect(self):
         if len(self.ad.dcs()) == 0:
             logging.error('Could not find a domain controller. Consider specifying a domain and/or DNS server.')
-            sys.exit(1)
 
         if not self.ad.baseDN:
             logging.error('Could not figure out the domain to query. Please specify this manualy with -d')
-            sys.exit(1)
 
         pdc = self.ad.dcs()[0]
         logging.debug('Using LDAP server: %s', pdc)

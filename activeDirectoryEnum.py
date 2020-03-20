@@ -97,13 +97,12 @@ class EnumAD():
         # Lets clear variable now
         self.passwd = None
 
-
-    def suppressOutput(func):
-        def wrapper(*a, **ka):
-            with open(os.devnull, 'w') as devnull:
-                with contextlib.redirect_stderr(devnull):
-                    func(*a, **ka)
-        return wrapper
+    
+    @contextlib.contextmanager
+    def suppressOutput(self):
+        with open(os.devnull, 'w') as devnull:
+            with contextlib.redirect_stderr(devnull) as err, contextlib.redirect_stdout(devnull) as out:
+                yield (err, out)
 
 
     def bind(self): 
@@ -256,18 +255,21 @@ class EnumAD():
         return arr
 
 
-    @suppressOutput
     def outputToBloodhoundJson(self):
         print('[ ' + colored('OK', 'green') +' ] Generating BloodHound output - this may take time...')
-        opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server)
-        auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
-        ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
-        ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
-        bloodhound = BloodHound(ad)
-        bloodhound.connect()
-        collection = resolve_collection_methods('Session,Trusts,ACL,DCOM,RDP,PSRemote')
-        bloodhound.run(collect=collection, num_workers=40, disable_pooling=False)
-        print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
+        try:
+            with self.suppressOutput():
+                opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server)
+                auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
+                ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
+                ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+                bloodhound = BloodHound(ad)
+                bloodhound.connect()
+                collection = resolve_collection_methods('Session,Trusts,ACL,DCOM,RDP,PSRemote')
+                bloodhound.run(collect=collection, num_workers=40, disable_pooling=False)
+                print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
+        except Exception as e:
+            print('[ ' + colored('NOT OK', 'red') +' ] Generating BloodHound output failed')
 
 
     def sortComputers(self):
@@ -450,9 +452,9 @@ class EnumAD():
                 for h in hashes:
                     f.write(str(h) + '\n')
 
-            print('[ ' + colored('OK', 'green') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.server))
+            print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.server))
         else:
-            print('[ ' + colored('NOT OK', 'red') +' ] Got 0 hashes')
+            print('[ ' + colored('OK', 'green') +' ] Got 0 hashes')
 
 
     def enumSPNUsers(self):
