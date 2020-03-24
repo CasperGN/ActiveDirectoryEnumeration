@@ -285,15 +285,16 @@ class EnumAD():
                     for item in paths[1:]:
                         print('item: ' + str(item))
                         if '.xml' in item.split('\\')[-1]:
-                            print('itemi .xml: ' + str(item))
+                            print('item .xml: ' + str(item))
                             with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
                                 smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
                             with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
                                 try:
-                                    passwdMatch = cpassRE.findall(f.read())
+                                    fileContent = f.read()
+                                    passwdMatch = cpassRE.findall(str(fileContent))
                                     print(passwdMatch)
                                     for passwd in passwdMatch:
-                                        unameMatch = unameRE.findall(f.read())
+                                        unameMatch = unameRE.findall(str(fileContent))
                                         print(unameMatch)
                                         for usr in unameMatch:
                                             padding = '=' * (4 - len(hit) % 4) 
