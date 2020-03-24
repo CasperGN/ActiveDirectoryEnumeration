@@ -71,6 +71,7 @@ class EnumAD():
         
         self.checkForPW()
         self.checkOS()
+        self.checkSYSVOL()
 
         if bhout:
             self.outputToBloodhoundJson()
@@ -253,6 +254,48 @@ class EnumAD():
                 break
 
         print('[ ' + colored('OK', 'green') +' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
+    
+
+    def checkSYSVOL(self):
+        cpasswords = []
+        #try:
+        smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
+        smbconn.login(self.domuser, self.passwd)
+        dirs = smbconn.listShares()
+        for share in dirs:
+            if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
+                path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
+                for dirname in paths:
+                    try:
+                        # Dont want . or ..
+                        subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
+                        for sub in subPath:
+                            if len(sub.get_shortname()) > 2:
+                                paths.append(dirname + '\\' + sub.get_shortname())
+                    except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+                        continue
+                # Since the first entry is the DC we dont want that
+                
+                #cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9]+)\"')
+                cpassRE = re.compile(r'Version=([a-zA-Z0-9]+)')
+                for item in paths[1:]:
+                    if '.' in item.split('\\')[-1]:
+                    #if '.xml' in item.split('\\')[-1]:
+                        with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
+                            smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
+                        with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
+                            try:
+                                match = cpassRE.search(f.read())
+                                cpasswords.append(match.group(0))
+                            except (UnicodeDecodeError, AttributeError) as e:
+                                continue
+        print(cpasswords)
+
+        #except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+        #    print('[ ' + colored('NOT OK', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+        #else:
+        #    smbconn.close()
 
 
     def splitJsonArr(self, arr):
