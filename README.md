@@ -80,6 +80,10 @@ python3 -m activeDirectoryEnum
 - [ ] Make validation of password before proceeding with ldap connection + querries 
 - [ ] Create better validation of input format to ensure that domain flag is of `domain.local` type and user is `user@domain.local`
 - [ ] Test for RPC and SMB Null sessions
+- [ ] Get accounts with passwords set long time ago
+- [ ] NTLM vs. LM hashes - Search for old accounts
+- [ ] Extract hashes and brute against fx. rockyou / SecList etc.
+
 
 ## Collaboration
 
