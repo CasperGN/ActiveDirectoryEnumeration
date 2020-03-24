@@ -10,7 +10,7 @@ from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
 from Crypto.Cipher import AES
 import contextlib
-import argparse, textwrap, errno, sys, socket, json, re, os
+import argparse, textwrap, errno, sys, socket, json, re, os, base64
 
 # Thanks SecureAuthCorp for GetNPUsers.py
 # For Kerberos preauthentication
