@@ -304,7 +304,7 @@ class EnumAD():
                                         unameMatch = unameRE.findall(str(fileContent))
                                         print(unameMatch)
                                         for usr in unameMatch:
-                                            padding = '=' * (4 - len(hit) % 4) 
+                                            padding = '=' * (4 - len(passwd) % 4) 
                                             print(cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip())
                                             cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
                                 except (UnicodeDecodeError, AttributeError) as e:
