@@ -300,6 +300,8 @@ class EnumAD():
                                             print(cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip())
                                             cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
                                 except (UnicodeDecodeError, AttributeError) as e:
+                                    # Remove the files we had to write during the search
+                                    os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
                                     continue
 
                             # Remove the files we had to write during the search
