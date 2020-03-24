@@ -47,11 +47,12 @@ The script can now be called as a module or be imported:
 python3 -m activeDirectoryEnum 
 ```
 
-## Included attacks
+## Included attacks/vectors
 
 - [X] ASREPRoasting
 - [X] Kerberoasting
 - [X] Dump AD as BloodHound JSON files 
+- [X] Searching GPOs in SYSVOL for cpassword and decrypting  
 
 ## Features list and status
 
