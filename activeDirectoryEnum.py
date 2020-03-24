@@ -299,7 +299,8 @@ class EnumAD():
                                         unameMatch = unameRE.findall(str(fileContent))
                                         for usr in unameMatch:
                                             padding = '=' * (4 - len(passwd) % 4) 
-                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip().decode('utf-8')
+                                            # For some reason, trailing nul bytes were on each character, so we remove any if they are there
+                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip().decode('utf-8').replace('\x00', '')
                                 except (UnicodeDecodeError, AttributeError) as e:
                                     # Remove the files we had to write during the search
                                     os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
@@ -309,7 +310,7 @@ class EnumAD():
                             os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
 
             if len(cpasswords.keys()) > 0:
-                with open('{0}-cpasswords.json', 'w') as f:
+                with open('{0}-cpasswords.json'.format(self.server), 'w') as f:
                     json.dump(cpasswords, f)
 
             if len(cpasswords.keys()) == 1:
