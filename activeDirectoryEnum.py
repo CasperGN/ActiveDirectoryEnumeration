@@ -283,7 +283,7 @@ class EnumAD():
                 
                     # Compile regexes for username and passwords
                     cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
-                    unameRE = re.compile(r'userName=\"([ a-zA-Z0-9/\(\)-]+)\"')
+                    unameRE = re.compile(r'userName|runAs=\"([ a-zA-Z0-9/\(\)-]+)\"')
 
                     # Prepare the ciphers based on MSDN article with key and IV
                     cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
