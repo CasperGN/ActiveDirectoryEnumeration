@@ -72,7 +72,7 @@ python3 -m activeDirectoryEnum
 - [X] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
 - [X] Query all users with an actual password set in the property `userPassword:` -> Fixed in [f05308b](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/f05308ba4db0d2abda86e15a5145d2ce44c5c889)
   - [ ] Check if password is encrypted/hashed and if so, dump in JTR format
-- [ ] Search SYSVOL share for any passwords in GPOs and crack them [see](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Active%20Directory%20Attack.md#passwords-in-sysvol--group-policy-preferences)
+- [X] Search SYSVOL share for any passwords in GPOs and crack them [see](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Active%20Directory%20Attack.md#passwords-in-sysvol--group-policy-preferences)
 - [ ] Try to get SilverTicket
 - [ ] Try to get GoldenTicket
 - [X] Make `--all` flag that runs all checks
