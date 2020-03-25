@@ -112,17 +112,24 @@ class EnumAD():
                 self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
                 self.conn.bind()
                 self.conn.start_tls()
+                # Validate the login (bind) request
+                if int(self.conn.result['result']) != 0:
+                    print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
+                    sys.exit(1)
+                else:
+                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
             else:
                 self.dc_conn = Server(self.server, get_info=ALL)
                 self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
                 self.conn.bind()
-            if self.ldaps:
-                 print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
-            else:
-                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
-        # Too broad a catch. 
+                # Validate the login (bind) request
+                if int(self.conn.result['result']) != 0:
+                    print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
+                    sys.exit(1)
+                else:
+                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # TODO: Catch individual exceptions instead
-        except:
+        except Exception as e:
             if self.ldaps:
                 print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
