@@ -78,7 +78,7 @@ python3 -m activeDirectoryEnum
 - [X] Make `--all` flag that runs all checks
 - [X] Move smb enum to be the last check
 - [X] Make validation of password before proceeding with ldap connection + querries 
-- [ ] Create better validation of input format to ensure that domain flag is of `domain.local` type and user is `user@domain.local`
+- [X] Create better validation of input format to ensure that domain flag is of `domain.local` type and user is `user@domain.local`
 - [ ] Test for RPC and SMB Null sessions
 
 ## Collaboration
