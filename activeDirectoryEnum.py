@@ -565,6 +565,20 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
+    domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
+    userRE = re.compile(r'^([a-zA-Z0-9-]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
+
+    domainMatch = domainRE.findall(args.dc)
+    userMatch = userRE.findall(args.user)
+
+    if not domainMatch:
+        print('[ ' + colored('NOT OK', 'red') +' ] Domain flag has to be in the form "domain.local"')
+        sys.exit(1)
+    if not userMatch:
+        print('[ ' + colored('NOT OK', 'red') +' ] User flag has to be in the form "user@domain.local"')
+        sys.exit(1)
+
     if args.all:
         args.smb = True
         args.kerberos_preauth = True
