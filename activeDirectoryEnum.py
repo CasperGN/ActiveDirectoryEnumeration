@@ -9,6 +9,7 @@ from termcolor import colored
 from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
 from Crypto.Cipher import AES
+from dns.resolver import NXDOMAIN
 import contextlib
 import argparse, textwrap, errno, sys, socket, json, re, os, base64
 
@@ -338,14 +339,29 @@ class EnumAD():
             with self.suppressOutput():
                 opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server)
                 auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
+            try:
                 ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
                 ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+            except (NXDOMAIN) as e:
+                # So we didnt succeed with DNS lookup. Most likely an internal, so lets try to point to the DC
+                print('[ ' + colored('NOT OK', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
+                try:
+                    ns = socket.gethostbyname(self.server)
+                    opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server, nameserver=ns)
+                    ad = AD(auth=auth, domain=self.server, nameserver=ns, dns_tcp=False)
+                    ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+                except (NXDOMAIN) as e:
+                    # I'm all out of luck
+                    print('[ ' + colored('NOT OK', 'red') +' ] DNS lookup of Domain Controller failed with DC as nameserver')
+                    exit(1)
+            with self.suppressOutput():
                 bloodhound = BloodHound(ad)
                 bloodhound.connect()
                 collection = resolve_collection_methods('Session,Trusts,ACL,DCOM,RDP,PSRemote')
                 bloodhound.run(collect=collection, num_workers=40, disable_pooling=False)
-                print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
+            print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
         except Exception as e:
+            print(e)
             print('[ ' + colored('NOT OK', 'red') +' ] Generating BloodHound output failed')
 
 
@@ -634,6 +650,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     args = parser.parse_args()
+
 
     if args.all:
         args.smb = True
