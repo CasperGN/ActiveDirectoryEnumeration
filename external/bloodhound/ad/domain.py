@@ -520,7 +520,7 @@ class AD(object):
                     self._dcs.append(dc)
 
         except resolver.NXDOMAIN:
-            pass
+            raise resolver.NXDOMAIN
 
         try:
             q = self.dnsresolver.query(query.replace('pdc','gc'), 'SRV', tcp=self.dns_tcp)
