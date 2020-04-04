@@ -55,6 +55,7 @@ python3 -m activeDirectoryEnum
 - [X] Kerberoasting
 - [X] Dump AD as BloodHound JSON files 
 - [X] Searching GPOs in SYSVOL for cpassword and decrypting  
+- [X] Run without creds and attempt to gather for further enumeration during the run
 
 ## Features list and status
 
