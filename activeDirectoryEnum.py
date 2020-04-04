@@ -686,26 +686,22 @@ class EnumAD():
                 test_conn.unbind()
 
                 # Attempt for base64
-                if password[-1:] == '=':
-                    # Could be base64, lets try
-                    pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
+                # Could be base64, lets try
+                pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
         
-                    # Attempt decoded PW
-                    dc_test_conn = Server(self.server, get_info=ALL)
-                    test_conn = Connection(dc_test_conn, user=user, password=pw)
-                    test_conn.bind()
-                    # Validate the login (bind) request
-                    if int(test_conn.result['result']) != 0:
-                        print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
-                    else:
-                        print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
-                        print('')
-                        self.domuser = user
-                        self.passwd = pw
-                        self.runWithCreds()
-
-
-        
+                # Attempt decoded PW
+                dc_test_conn = Server(self.server, get_info=ALL)
+                test_conn = Connection(dc_test_conn, user=user, password=pw)
+                test_conn.bind()
+                # Validate the login (bind) request
+                if int(test_conn.result['result']) != 0:
+                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
+                    print('')
+                    self.domuser = user
+                    self.passwd = pw
+                    self.runWithCreds()
 
 
 if __name__ == "__main__":
