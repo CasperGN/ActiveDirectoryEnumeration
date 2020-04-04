@@ -66,6 +66,7 @@ class EnumAD():
         self.gpo = []
         self.domains = []
         self.ous = []
+        self.passwd = False
 
         if domuser is not False:
             self.runWithCreds()
@@ -144,7 +145,7 @@ class EnumAD():
                 self.conn.start_tls()
                 # Validate the login (bind) request
                 if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
+                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
                     sys.exit(1)
                 else:
                     print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
@@ -154,16 +155,16 @@ class EnumAD():
                 self.conn.bind()
                 # Validate the login (bind) request
                 if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
+                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
                     sys.exit(1)
                 else:
                     print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # TODO: Catch individual exceptions instead
         except Exception as e:
             if self.ldaps:
-                print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
-                print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.server))
             sys.exit(1)
 
 
@@ -234,11 +235,11 @@ class EnumAD():
                 json.dump(passwords, f, sort_keys=False) 
 
         if len(passwords.keys()) == 1:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
+            print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
         elif len(passwords.keys()) == 0:
             print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
         else:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
 
 
     '''
@@ -346,7 +347,7 @@ class EnumAD():
 
 
         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
-            print('[ ' + colored('NOT OK', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+            print('[ ' + colored('ERROR', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
         else:
             smbconn.close()
 
@@ -369,7 +370,7 @@ class EnumAD():
                 ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
             except (NXDOMAIN) as e:
                 # So we didnt succeed with DNS lookup. Most likely an internal, so lets try to point to the DC
-                print('[ ' + colored('NOT OK', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
+                print('[ ' + colored('WARN', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
                 try:
                     ns = socket.gethostbyname(self.server)
                     opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server, nameserver=ns)
@@ -377,7 +378,7 @@ class EnumAD():
                     ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
                 except (NXDOMAIN) as e:
                     # I'm all out of luck
-                    print('[ ' + colored('NOT OK', 'red') +' ] DNS lookup of Domain Controller failed with DC as nameserver')
+                    print('[ ' + colored('ERROR', 'red') +' ] DNS lookup of Domain Controller failed with DC as nameserver')
                     exit(1)
             with self.suppressOutput():
                 bloodhound = BloodHound(ad)
@@ -387,7 +388,7 @@ class EnumAD():
             print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
         except Exception as e:
             print(e)
-            print('[ ' + colored('NOT OK', 'red') +' ] Generating BloodHound output failed')
+            print('[ ' + colored('ERROR', 'red') +' ] Generating BloodHound output failed')
 
 
     def sortComputers(self):
@@ -401,7 +402,7 @@ class EnumAD():
             print('[ ' + colored('OK', 'green') +' ] Found {0} dnsname'.format(len(self.smbShareCandidates)))
         else:
             print('[ ' + colored('OK', 'green') +' ] Found {0} dnsnames'.format(len(self.smbShareCandidates)))
-
+        print(self.smbShareCandidates)
 
     def enumSMB(self):
         progBar = ProgressBar(widgets=['SMBConnection test: ', Percentage(), Bar(), ETA()], maxval=len(self.smbShareCandidates)).start()
@@ -644,7 +645,7 @@ class EnumAD():
 
 
         except KerberosError as err:
-            print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
+            print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
             pass
 
 
@@ -661,7 +662,7 @@ class EnumAD():
             user = json.loads(self.people[idx].entry_to_json())
             for prop, value in user['attributes'].items():
                 if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
-                    possiblePass[user['attributes']['name'][0]] = value[0]
+                    possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
             idx += 1
         if len(possiblePass) > 0:
             print('[ ' + colored('OK', 'green') +' ] Found possible password in properties')
@@ -676,7 +677,7 @@ class EnumAD():
                 if int(test_conn.result['result']) != 0:
                     print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
                 else:
-                    print('[ ' + colored('OK', 'green') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
+                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
                     print('')
                     self.domuser = user
                     self.passwd = password
@@ -697,7 +698,7 @@ class EnumAD():
                     if int(test_conn.result['result']) != 0:
                         print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
                     else:
-                        print('[ ' + colored('OK', 'green') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
+                        print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
                         print('')
                         self.domuser = user
                         self.passwd = pw
@@ -738,12 +739,12 @@ if __name__ == "__main__":
 
     # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
-    userRE = re.compile(r'^([a-zA-Z0-9-]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
+    userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
 
     domainMatch = domainRE.findall(args.dc)
 
     if not domainMatch:
-        print('[ ' + colored('NOT OK', 'red') +' ] Domain flag has to be in the form "domain.local"')
+        print('[ ' + colored('ERROR', 'red') +' ] Domain flag has to be in the form "domain.local"')
         sys.exit(1)
 
     if args.all:
@@ -756,7 +757,7 @@ if __name__ == "__main__":
     else:
         userMatch = userRE.findall(args.user)
         if not userMatch:
-            print('[ ' + colored('NOT OK', 'red') +' ] User flag has to be in the form "user@domain.local"')
+            print('[ ' + colored('ERROR', 'red') +' ] User flag has to be in the form "user@domain.local"')
             sys.exit(1)
 
     
