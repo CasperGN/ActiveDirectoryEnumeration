@@ -66,6 +66,7 @@ class EnumAD():
         self.gpo = []
         self.domains = []
         self.ous = []
+        self.deletedUsers = []
         self.passwd = False
 
         if domuser is not False:
@@ -75,6 +76,7 @@ class EnumAD():
        
 
     def runWithCreds(self):
+        self.CREDS = True
         if not self.passwd:
             self.passwd = str(getpass())
         self.bind()
@@ -110,6 +112,7 @@ class EnumAD():
 
 
     def runWithoutCreds(self):
+        self.CREDS = False
         print('[ ' + colored('INFO', 'green') +' ] Attempting to get objects without credentials'.format(self.server))           
         self.passwd = ''
         self.domuser = ''
@@ -124,8 +127,9 @@ class EnumAD():
         self.checkForPW()
         self.checkOS()
 
-        self.enumForCreds()
+        self.enumForCreds(self.people)
 
+        print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find usable info as anonymous user, please gather credentials and run again')
         exit(0)
 
     
@@ -217,6 +221,15 @@ class EnumAD():
             self.ous.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all OUs')
 
+        # Get deleted users
+        self.conn.search(self.dc_string[:-1], '(objectclass=user)', attributes=self.ldapProps, search_scope=SUBTREE, controls=[('1.2.840.113556.1.4.417', True, None)])
+        for entry in self.conn.entries:
+            self.deletedUsers.append(entry)
+        print('[ ' + colored('OK', 'green') +' ] Got all deleted users')
+        if len(self.deletedUsers) > 0:
+            print('[ ' + colored('INFO', 'green') +' ] Searching for juicy info in deleted users')
+            self.enumForCreds(self.deletedUsers)
+        
 
     '''
         Since it sometimes is real that the property 'userPassword:' is set
@@ -649,7 +662,7 @@ class EnumAD():
             pass
 
 
-    def enumForCreds(self):
+    def enumForCreds(self, ldapdump):
         searchTerms = [
                 'legacy', 'pass', 'password', 'pwd', 'passcode'
         ]
@@ -658,50 +671,71 @@ class EnumAD():
         ]
         possiblePass = {}
         idx = 0
-        for entry in self.people:
-            user = json.loads(self.people[idx].entry_to_json())
+        for entry in ldapdump:
+            user = json.loads(ldapdump[idx].entry_to_json())
             for prop, value in user['attributes'].items():
                 if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
                     possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
             idx += 1
         if len(possiblePass) > 0:
-            print('[ ' + colored('OK', 'green') +' ] Found possible password in properties')
+            print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties')
             print('[ ' + colored('INFO', 'green') +' ] Attempting to determine if it is a password')
 
             for user, password in possiblePass.items():
-                # First check if it is a clear text
-                dc_test_conn = Server(self.server, get_info=ALL)
-                test_conn = Connection(dc_test_conn, user=user, password=password)
-                test_conn.bind()
-                # Validate the login (bind) request
-                if int(test_conn.result['result']) != 0:
-                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
-                else:
-                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
-                    print('')
-                    self.domuser = user
-                    self.passwd = password
-                    self.runWithCreds()
+                try:
+                    usr, passwd = self.entroPass(user, password)
+                except TypeError:
+                    # None returned, just continue
+                    continue
+            if not self.CREDS:
+                self.domuser = usr
+                self.passwd = passwd
+                self.runWithCreds()
+                exit(0)
 
-                test_conn.unbind()
 
-                # Attempt for base64
-                # Could be base64, lets try
-                pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
-        
-                # Attempt decoded PW
-                dc_test_conn = Server(self.server, get_info=ALL)
-                test_conn = Connection(dc_test_conn, user=user, password=pw)
-                test_conn.bind()
-                # Validate the login (bind) request
-                if int(test_conn.result['result']) != 0:
-                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
-                else:
-                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
-                    print('')
-                    self.domuser = user
-                    self.passwd = pw
-                    self.runWithCreds()
+    def entroPass(self, user, password):
+        # First check if it is a clear text
+        dc_test_conn = Server(self.server, get_info=ALL)
+        test_conn = Connection(dc_test_conn, user=user, password=password)
+        test_conn.bind()
+        # Validate the login (bind) request
+        if int(test_conn.result['result']) != 0:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible clear text password'.format(user, password))
+            else:
+                print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
+        else:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property'.format(user, password))
+            else:
+                print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
+                print('')
+                return user, password
+
+        test_conn.unbind()
+
+        # Attempt for base64
+        # Could be base64, lets try
+        pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
+    
+        # Attempt decoded PW
+        dc_test_conn = Server(self.server, get_info=ALL)
+        test_conn = Connection(dc_test_conn, user=user, password=pw)
+        test_conn.bind()
+        # Validate the login (bind) request
+        if int(test_conn.result['result']) != 0:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible base64 decoded password'.format(user, pw))
+            else:
+                print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
+        else:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property'.format(user, pw))
+            else:
+                print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
+                print('')
+                return user, pw
 
 
 if __name__ == "__main__":
