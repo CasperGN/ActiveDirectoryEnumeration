@@ -129,7 +129,7 @@ class EnumAD():
 
         self.enumForCreds(self.people)
 
-        print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find usable info as anonymous user, please gather credentials and run again')
+        print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find useable info as anonymous user, please gather credentials and run again')
         exit(0)
 
     
