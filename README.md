@@ -1,7 +1,8 @@
 ## ADE - ActiveDirectoryEnum
 ```
-usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-s] [-smb] [-kp] [-bh] [-spn]
-                       dc user
+usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-s] [-smb] [-kp]
+                           [-bh] [-spn] [--all] [--no-creds]
+                           dc
 
         ___        __  _            ____  _                __                   ______                    
        /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
@@ -14,23 +15,24 @@ usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-s] [-smb] [-kp] [-bh] [-spn]
 
 positional arguments:
   dc                    Hostname of the Domain Controller
-  user                  Username of the domain user to query with. The
-                        username has to be domain name as `user@domain.org`
 
 optional arguments:
   -h, --help            show this help message and exit
   -o OUT_FILE, --out-file OUT_FILE
                         Path to output file. If no path, CWD is assumed
                         (default: None)
+  -u USER, --user USER  Username of the domain user to query with. The
+                        username has to be domain name as `user@domain.org`
   -s, --secure          Try to estalish connection through LDAPS
-  -smb, --smb           Force enumeration of SMB shares on all computer objects
-                        fetched
+  -smb, --smb           Force enumeration of SMB shares on all computer
+                        objects fetched
   -kp, --kerberos_preauth
                         Attempt to gather users that does not require Kerberos
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
   -spn                  Attempt to get all SPNs and perform Kerberoasting
   --all                 Run all checks
+  --no-creds            Start without credentials
 
 ```
 
@@ -53,6 +55,7 @@ python3 -m activeDirectoryEnum
 - [X] Kerberoasting
 - [X] Dump AD as BloodHound JSON files 
 - [X] Searching GPOs in SYSVOL for cpassword and decrypting  
+- [X] Run without creds and attempt to gather for further enumeration during the run
 
 ## Features list and status
 

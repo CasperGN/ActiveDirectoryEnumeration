@@ -8,10 +8,9 @@ from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
+import contextlib, argparse, textwrap, errno, sys, socket, json, re, os, base64
 from Crypto.Cipher import AES
 from dns.resolver import NXDOMAIN
-import contextlib
-import argparse, textwrap, errno, sys, socket, json, re, os, base64
 
 # Thanks SecureAuthCorp for GetNPUsers.py
 # For Kerberos preauthentication
@@ -38,14 +37,15 @@ from external.bloodhound.ad.authentication import ADAuthentication
 
 class EnumAD():
 
-    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, domuser=None, getAll=True, computer=None):
+    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, domuser=None, computer=None):
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
-        if not getAll:
-            self.computer = computer
-        if domuser is not None:
-            self.passwd = str(getpass())
+        self.output = output
+        self.bhout = bhout
+        self.kpre = kpre
+        self.spnEnum = spnEnum
+        self.enumsmb = enumsmb
 
         self.ou_structure = domainController.split('.')
         self.dc_string=''
@@ -66,31 +66,41 @@ class EnumAD():
         self.gpo = []
         self.domains = []
         self.ous = []
+        self.deletedUsers = []
+        self.passwd = False
 
-        
+        if domuser is not False:
+            self.runWithCreds()
+        else:
+            self.runWithoutCreds()
+       
+
+    def runWithCreds(self):
+        self.CREDS = True
+        if not self.passwd:
+            self.passwd = str(getpass())
         self.bind()
         self.search()
-        
+
+        if self.output:
+            self.write_file()
+       
         self.checkForPW()
         self.checkOS()
         self.checkSYSVOL()
 
-        if bhout:
+        if self.bhout:
             self.outputToBloodhoundJson()
     
-        if kpre:
+        if self.kpre:
             self.enumKerbPre()
     
-        if spnEnum:
+        if self.spnEnum:
             self.enumSPNUsers()
         
         self.conn.unbind()
-
-        if output:
-            self.output = output
-            self.write_file()
         
-        if enumsmb:
+        if self.enumsmb:
             # Setting variables for further testing and analysis
             self.smbShareCandidates = []
             self.smbBrowseable = {}
@@ -99,6 +109,28 @@ class EnumAD():
 
         # Lets clear variable now
         self.passwd = None
+
+
+    def runWithoutCreds(self):
+        self.CREDS = False
+        print('[ ' + colored('INFO', 'green') +' ] Attempting to get objects without credentials'.format(self.server))           
+        self.passwd = ''
+        self.domuser = ''
+        print('')
+
+        self.bind()
+        self.search()
+
+        if self.output:
+            self.write_file()
+       
+        self.checkForPW()
+        self.checkOS()
+
+        self.enumForCreds(self.people)
+
+        print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find useable info as anonymous user, please gather credentials and run again')
+        exit(0)
 
     
     @contextlib.contextmanager
@@ -117,7 +149,7 @@ class EnumAD():
                 self.conn.start_tls()
                 # Validate the login (bind) request
                 if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
+                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
                     sys.exit(1)
                 else:
                     print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
@@ -127,22 +159,20 @@ class EnumAD():
                 self.conn.bind()
                 # Validate the login (bind) request
                 if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
+                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
                     sys.exit(1)
                 else:
                     print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # TODO: Catch individual exceptions instead
         except Exception as e:
             if self.ldaps:
-                print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
-                print('\033[1A\r[ ' + colored('NOT OK', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.server))
+                print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.server))
             sys.exit(1)
 
 
     def search(self):
-       
-
         # Get computer objects
         self.conn.search(self.dc_string[:-1], '(&(sAMAccountType=805306369)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))', attributes=self.ldapProps, search_scope=SUBTREE)
         for entry in self.conn.entries:
@@ -191,6 +221,15 @@ class EnumAD():
             self.ous.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all OUs')
 
+        # Get deleted users
+        self.conn.search(self.dc_string[:-1], '(objectclass=user)', attributes=self.ldapProps, search_scope=SUBTREE, controls=[('1.2.840.113556.1.4.417', True, None)])
+        for entry in self.conn.entries:
+            self.deletedUsers.append(entry)
+        print('[ ' + colored('OK', 'green') +' ] Got all deleted users')
+        if len(self.deletedUsers) > 0:
+            print('[ ' + colored('INFO', 'green') +' ] Searching for juicy info in deleted users')
+            self.enumForCreds(self.deletedUsers)
+        
 
     '''
         Since it sometimes is real that the property 'userPassword:' is set
@@ -209,11 +248,11 @@ class EnumAD():
                 json.dump(passwords, f, sort_keys=False) 
 
         if len(passwords.keys()) == 1:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
+            print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
         elif len(passwords.keys()) == 0:
             print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
         else:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
 
 
     '''
@@ -321,7 +360,7 @@ class EnumAD():
 
 
         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
-            print('[ ' + colored('NOT OK', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+            print('[ ' + colored('ERROR', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
         else:
             smbconn.close()
 
@@ -344,7 +383,7 @@ class EnumAD():
                 ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
             except (NXDOMAIN) as e:
                 # So we didnt succeed with DNS lookup. Most likely an internal, so lets try to point to the DC
-                print('[ ' + colored('NOT OK', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
+                print('[ ' + colored('WARN', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
                 try:
                     ns = socket.gethostbyname(self.server)
                     opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server, nameserver=ns)
@@ -352,7 +391,7 @@ class EnumAD():
                     ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
                 except (NXDOMAIN) as e:
                     # I'm all out of luck
-                    print('[ ' + colored('NOT OK', 'red') +' ] DNS lookup of Domain Controller failed with DC as nameserver')
+                    print('[ ' + colored('ERROR', 'red') +' ] DNS lookup of Domain Controller failed with DC as nameserver')
                     exit(1)
             with self.suppressOutput():
                 bloodhound = BloodHound(ad)
@@ -362,7 +401,7 @@ class EnumAD():
             print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
         except Exception as e:
             print(e)
-            print('[ ' + colored('NOT OK', 'red') +' ] Generating BloodHound output failed')
+            print('[ ' + colored('ERROR', 'red') +' ] Generating BloodHound output failed')
 
 
     def sortComputers(self):
@@ -619,8 +658,84 @@ class EnumAD():
 
 
         except KerberosError as err:
-            print('[ ' + colored('NOT OK', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
+            print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
             pass
+
+
+    def enumForCreds(self, ldapdump):
+        searchTerms = [
+                'legacy', 'pass', 'password', 'pwd', 'passcode'
+        ]
+        excludeTerms = [
+                'badPasswordTime', 'badPwdCount', 'pwdLastSet'
+        ]
+        possiblePass = {}
+        idx = 0
+        for entry in ldapdump:
+            user = json.loads(ldapdump[idx].entry_to_json())
+            for prop, value in user['attributes'].items():
+                if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
+                    possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
+            idx += 1
+        if len(possiblePass) > 0:
+            print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties')
+            print('[ ' + colored('INFO', 'green') +' ] Attempting to determine if it is a password')
+
+            for user, password in possiblePass.items():
+                try:
+                    usr, passwd = self.entroPass(user, password)
+                except TypeError:
+                    # None returned, just continue
+                    continue
+            if not self.CREDS:
+                self.domuser = usr
+                self.passwd = passwd
+                self.runWithCreds()
+                exit(0)
+
+
+    def entroPass(self, user, password):
+        # First check if it is a clear text
+        dc_test_conn = Server(self.server, get_info=ALL)
+        test_conn = Connection(dc_test_conn, user=user, password=password)
+        test_conn.bind()
+        # Validate the login (bind) request
+        if int(test_conn.result['result']) != 0:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible clear text password'.format(user, password))
+            else:
+                print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
+        else:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property'.format(user, password))
+            else:
+                print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
+                print('')
+                return user, password
+
+        test_conn.unbind()
+
+        # Attempt for base64
+        # Could be base64, lets try
+        pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
+    
+        # Attempt decoded PW
+        dc_test_conn = Server(self.server, get_info=ALL)
+        test_conn = Connection(dc_test_conn, user=user, password=pw)
+        test_conn.bind()
+        # Validate the login (bind) request
+        if int(test_conn.result['result']) != 0:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible base64 decoded password'.format(user, pw))
+            else:
+                print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
+        else:
+            if self.CREDS:
+                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property'.format(user, pw))
+            else:
+                print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
+                print('')
+                return user, pw
 
 
 if __name__ == "__main__":
@@ -637,13 +752,14 @@ if __name__ == "__main__":
             '''))
     parser.add_argument('dc', type=str, help='Hostname of the Domain Controller')
     parser.add_argument('-o', '--out-file', type=str, help='Path to output file. If no path, CWD is assumed (default: None)')
-    parser.add_argument('user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
+    parser.add_argument('-u', '--user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
     parser.add_argument('-s', '--secure', help='Try to estalish connection through LDAPS', action='store_true')
     parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares on all computer objects fetched', action='store_true')
     parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
     parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
     parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting', action='store_true')
     parser.add_argument('--all', help='Run all checks', action='store_true')
+    parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -653,16 +769,12 @@ if __name__ == "__main__":
 
     # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
-    userRE = re.compile(r'^([a-zA-Z0-9-]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
+    userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
 
     domainMatch = domainRE.findall(args.dc)
-    userMatch = userRE.findall(args.user)
 
     if not domainMatch:
-        print('[ ' + colored('NOT OK', 'red') +' ] Domain flag has to be in the form "domain.local"')
-        sys.exit(1)
-    if not userMatch:
-        print('[ ' + colored('NOT OK', 'red') +' ] User flag has to be in the form "user@domain.local"')
+        print('[ ' + colored('ERROR', 'red') +' ] Domain flag has to be in the form "domain.local"')
         sys.exit(1)
 
     if args.all:
@@ -670,6 +782,14 @@ if __name__ == "__main__":
         args.kerberos_preauth = True
         args.bloodhound = True
         args.spn = True
+    if args.no_creds:
+        args.user = False
+    else:
+        userMatch = userRE.findall(args.user)
+        if not userMatch:
+            print('[ ' + colored('ERROR', 'red') +' ] User flag has to be in the form "user@domain.local"')
+            sys.exit(1)
+
     
     # Boolean flow control flags
     file_to_write = None
