@@ -57,38 +57,6 @@ python3 -m activeDirectoryEnum
 - [X] Searching GPOs in SYSVOL for cpassword and decrypting  
 - [X] Run without creds and attempt to gather for further enumeration during the run
 
-## Features list and status
-
-- [X] Found external module to handle Bloodhound json files 
-- [X] Enumerate all SPNs for Kerberoasting  
-  - [X] Get TGT for supplied user (requires testing on non-skew'ed machine)
-  - [X] Request TGS for each SPN gathered
-  - [X] Dump all tickets for offline cracking
-- [ ] Check servername for service indication (e.g. FTP, MSSQL, Other DB, Exhange etc) to map technical landscape  
-- [ ] Based upon above, enumerate the service indication for default login  
-- [X] Dump lowest Major OS servers (can we find Win2003, Win2008?) -> Fixed in [75bc987](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/75bc98798df623c5488ea9447e5335f4dcdfb873)
-- [X] Connect through LDAPS
-- [X] Bruteforce enumeration of SMB shares on all computer objects
-- [X] Output SMB Bruteforce enumeration properly -> Fixed in [9434920](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/9434920fbb729710ebf4034394b69643d445115a)
-- [X] Get all users with `Kerberos preauthentication` not required and dump hashes
-- [X] Write AD Object dump to raw file
-- [X] Fix [requirements.txt](requirements.txt) file, since not all the contained libs can be needed -> Fixed in [ad3e180](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/ad3e18076b91d0c081502d72fd75d3b284f2e707)
-- [X] Test SMB connection for encryption [see here](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/2585a91661ed8e344df8ea2ad95b5233c072fe38/activeDirectoryEnum.py#L395)
-- [X] Query all users with an actual password set in the property `userPassword:` -> Fixed in [f05308b](https://github.com/CasperGN/ActiveDirectoryEnumeration/commit/f05308ba4db0d2abda86e15a5145d2ce44c5c889)
-  - [ ] Check if password is encrypted/hashed and if so, dump in JTR format
-- [X] Search SYSVOL share for any passwords in GPOs and crack them -> [#12](https://github.com/CasperGN/ActiveDirectoryEnumeration/pull/12)
-- [ ] Try to get SilverTicket
-- [ ] Try to get GoldenTicket
-- [X] Make `--all` flag that runs all checks
-- [X] Move smb enum to be the last check
-- [X] Make validation of password before proceeding with ldap connection + querries 
-- [X] Create better validation of input format to ensure that domain flag is of `domain.local` type and user is `user@domain.local` -> [#13](https://github.com/CasperGN/ActiveDirectoryEnumeration/pull/13)
-- [ ] Test for RPC and SMB Null sessions
-- [ ] Get accounts with passwords set long time ago
-- [ ] NTLM vs. LM hashes - Search for old accounts
-- [ ] Extract hashes and brute against fx. rockyou / SecList etc.
-
-
 ## Collaboration
 
 While this project is developed to fit my need, any collaboration is appriciated. Please feel free to fork the project, make changes according to the License agreements and make a Pull Request.
