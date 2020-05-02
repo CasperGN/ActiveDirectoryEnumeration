@@ -3,6 +3,10 @@ import setuptools
 with open('README.md', 'r') as desc:
     long_desc = desc.read()
 
+reqs = []
+with open('requirements.txt', 'r') as req:
+    reqs.append(req.read())
+
 setuptools.setup(
         name = 'ActiveDirectoryEnum',
         version = '0.3.0',
@@ -13,29 +17,7 @@ setuptools.setup(
         long_description_content_type = 'text/markdown',
         url = 'https://github.com/CasperGN/ActiveDirectoryEnumeration',
         packages = setuptools.find_packages(),
-        install_reqs = [
-            "cffi",
-            "Click",
-            "cryptography",
-            "Crypto",
-            "dnspython",
-            "Flask",
-            "future",
-            "impacket",
-            "itsdangerous",
-            "Jinja2",
-            "ldap3",
-            "ldapdomaindump",
-            "MarkupSafe",
-            "progressbar",
-            "pyasn1"
-            "pycparser",
-            "pycryptodomex",
-            "pyOpenSSL",
-            "six",
-            "termcolor",
-            "Werkzeug",
-        ],
+        install_requires = reqs, 
         classifiers = [
             'Programming Language :: Python :: 3',
             'License :: OSI Approved :: MIT License',
