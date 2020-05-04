@@ -323,7 +323,7 @@ class EnumAD():
                     unameRE = re.compile(r'userName|runAs=\"([ a-zA-Z0-9/\(\)-]+)\"')
 
                     # Prepare the ciphers based on MSDN article with key and IV
-                    cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, '\x00' * 16)
+                    cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, bytes.fromhex('00' * 16))
                 
                     # Since the first entry is the DC we dont want that
                     for item in paths[1:]:
