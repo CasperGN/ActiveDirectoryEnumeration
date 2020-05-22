@@ -9,7 +9,7 @@ from termcolor import colored
 from impacket import smbconnection
 from impacket.dcerpc.v5 import srvs
 import contextlib, argparse, textwrap, errno, sys, socket, json, re, os, base64
-from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 from dns.resolver import NXDOMAIN
 
 # Thanks SecureAuthCorp for GetNPUsers.py
