@@ -21,6 +21,9 @@ setuptools.setup(
         classifiers = [
             'Programming Language :: Python :: 3',
             'License :: OSI Approved :: MIT License',
+            'Environment :: Console'
         ],
+        keywords='active-directory pentesting enumeration',
         python_requires = '>=3.4',
+        scripts=['activeDirectoryEnum.py'],
 )
