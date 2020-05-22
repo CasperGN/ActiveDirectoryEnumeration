@@ -2,9 +2,7 @@
 
 ## ADE - ActiveDirectoryEnum
 ```
-usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-s] [-smb] [-kp]
-                           [-bh] [-spn] [--all] [--no-creds]
-                           dc
+usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-s] [-smb] [-kp] [-bh] [-spn] [-cp] [--all] [--no-creds] dc
 
         ___        __  _            ____  _                __                   ______                    
        /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
@@ -21,18 +19,15 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -o OUT_FILE, --out-file OUT_FILE
-                        Path to output file. If no path, CWD is assumed
-                        (default: None)
-  -u USER, --user USER  Username of the domain user to query with. The
-                        username has to be domain name as `user@domain.org`
+                        Path to output file. If no path, CWD is assumed (default: None)
+  -u USER, --user USER  Username of the domain user to query with. The username has to be domain name as `user@domain.org`
   -s, --secure          Try to estalish connection through LDAPS
-  -smb, --smb           Force enumeration of SMB shares on all computer
-                        objects fetched
+  -smb, --smb           Force enumeration of SMB shares on all computer objects fetched
   -kp, --kerberos_preauth
-                        Attempt to gather users that does not require Kerberos
-                        preauthentication
+                        Attempt to gather users that does not require Kerberos preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
   -spn                  Attempt to get all SPNs and perform Kerberoasting
+  -cp, --sysvol         Enum all GPO's on SYSVOL for cpassword and decrypt it
   --all                 Run all checks
   --no-creds            Start without credentials
 
