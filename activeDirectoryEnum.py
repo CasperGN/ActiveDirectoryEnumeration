@@ -1,6 +1,6 @@
 import argparse, re, sys, textwrap
 from termcolor import colored
-import activeDirectoryEnum
+from activeDirectoryEnum import EnumAD
 
 
 if __name__ == "__main__":
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     if args.out_file:
         file_to_write = args.out_file
 
-    enumAD = activeDirectoryEnum.EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.user)
+    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.user)
 
     # Just print a blank line for output sake
     print('')
