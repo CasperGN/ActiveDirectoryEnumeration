@@ -467,8 +467,8 @@ class EnumAD():
             print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} with {2} subdirectories/file sare browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         if len(self.smbBrowseable.keys()) > 0:
             with open('{0}-open-smb.json'.format(self.server), 'w') as f:
-                json.dump(self.smbBrowseable, f)
-            print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb'.format(self.server))
+                json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
+            print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb.json'.format(self.server))
 
 
 
