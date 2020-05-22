@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
