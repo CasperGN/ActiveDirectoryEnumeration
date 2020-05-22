@@ -6,6 +6,7 @@ from ldap3.core.exceptions import LDAPKeyError
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from impacket import smbconnection
 
+
 class EnumSMB():
 
     def __init__(self, computers, user, passwd, server):
@@ -18,8 +19,8 @@ class EnumSMB():
         self.smbBrowseable = {}
         self.sortComputers()
         self.enumSMB()
-
-
+        
+        
     def sortComputers(self):
         for computer in self.computers:
             try:

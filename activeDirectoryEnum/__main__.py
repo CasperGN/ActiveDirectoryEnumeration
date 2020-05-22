@@ -23,6 +23,7 @@ if __name__ == "__main__":
     parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
     parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
     parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting', action='store_true')
+    parser.add_argument('-cp', '--sysvol', help='Enum all GPO\'s on SYSVOL for cpassword and decrypt it', action='store_true')
     parser.add_argument('--all', help='Run all checks', action='store_true')
     parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
 
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     if args.out_file:
         file_to_write = args.out_file
 
-    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.user)
+    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.user)
 
     # Just print a blank line for output sake
     print('')
