@@ -2,6 +2,8 @@
 [![GitHub forks](https://img.shields.io/github/forks/CasperGN/ActiveDirectoryEnumeration)](https://github.com/CasperGN/ActiveDirectoryEnumeration/network)
 [![Rawsec's CyberSecurity Inventory](https://inventory.rawsec.ml/img/badges/Rawsec-inventoried-FF5050_flat.svg)](https://inventory.rawsec.ml/tools.html#ActiveDirectoryEnumeration)
 [![GitHub license](https://img.shields.io/github/license/CasperGN/ActiveDirectoryEnumeration)](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/master/LICENSE)
+  
+[![Packaging status](https://repology.org/badge/vertical-allrepos/activedirectoryenum.svg)](https://repology.org/project/activedirectoryenum/versions)  
 
 ## ADE - ActiveDirectoryEnum
 ```
@@ -53,6 +55,11 @@ The script can now be called as a module or be imported:
 ```
 python3 -m activeDirectoryEnum 
 ```
+  
+If you run BlackArch, ActiveDirectoryEnum is available through `pacman` as such:  
+```
+pacman -S activedirectoryenum
+```  
 
 ## Included attacks/vectors
 
