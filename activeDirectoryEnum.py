@@ -667,7 +667,7 @@ class EnumAD():
                 'legacy', 'pass', 'password', 'pwd', 'passcode'
         ]
         excludeTerms = [
-                'badPasswordTime', 'badPwdCount', 'pwdLastSet'
+                'badPasswordTime', 'badPwdCount', 'pwdLastSet', 'legacyExchangeDN'
         ]
         possiblePass = {}
         idx = 0
