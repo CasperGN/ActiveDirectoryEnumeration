@@ -38,6 +38,7 @@ optional arguments:
                         preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
   -spn                  Attempt to get all SPNs and perform Kerberoasting
+  -sysvol               Search sysvol for GPOs with cpassword and decrypt it
   --all                 Run all checks
   --no-creds            Start without credentials
 
