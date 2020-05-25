@@ -9,7 +9,7 @@ with open('requirements.txt', 'r') as req:
 
 setuptools.setup(
         name = 'ActiveDirectoryEnum',
-        version = '0.3.1',
+        version = '0.3.2',
         author = 'Casper G. Nielsen',
         author_email = 'whopsec@protonmail.com',
         description = 'Enumerate Active Directory with standard vectors',
