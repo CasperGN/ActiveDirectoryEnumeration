@@ -361,7 +361,7 @@ class EnumAD():
 
 
         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
-            print('[ ' + colored('ERROR', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+            print('[ ' + colored('ERROR', 'red') + ' ] Some error occoured while searching SYSVOL')
         else:
             smbconn.close()
 
