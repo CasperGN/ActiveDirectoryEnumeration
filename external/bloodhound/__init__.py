@@ -155,16 +155,18 @@ def resolve_collection_methods(methods):
 
 def main():
 # 2020-03-10: Commented out all below logging definition that wasnt already
-#    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    #logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    logging.basicConfig(stream=os.devnull, level=logging.INFO)
 
-#    logger = logging.getLogger()
-#    logger.setLevel(logging.INFO)
-#    stream = logging.StreamHandler(sys.stderr)
-#    stream.setLevel(logging.DEBUG)
-#    formatter = logging.Formatter('%(levelname)s: %(message)s')
-#    formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-#    stream.setFormatter(formatter)
-#    logger.addHandler(stream)
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    #stream = logging.StreamHandler(sys.stderr)
+    stream = logging.StreamHandler(os.devnull)
+    stream.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(levelname)s: %(message)s')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+    stream.setFormatter(formatter)
+    logger.addHandler(stream)
 
     parser = argparse.ArgumentParser(add_help=True, description='Python based ingestor for BloodHound\nFor help or reporting issues, visit https://github.com/Fox-IT/BloodHound.py', formatter_class=argparse.RawDescriptionHelpFormatter)
 

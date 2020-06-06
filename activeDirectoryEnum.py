@@ -37,7 +37,7 @@ from external.bloodhound.ad.authentication import ADAuthentication
 
 class EnumAD():
 
-    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, domuser=None, computer=None):
+    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, searchSysvol, domuser=None, computer=None):
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
@@ -46,6 +46,7 @@ class EnumAD():
         self.kpre = kpre
         self.spnEnum = spnEnum
         self.enumsmb = enumsmb
+        self.searchSysvol = searchSysvol
 
         self.ou_structure = domainController.split('.')
         self.dc_string=''
@@ -87,7 +88,8 @@ class EnumAD():
        
         self.checkForPW()
         self.checkOS()
-        self.checkSYSVOL()
+        if self.searchSysvol:
+            self.checkSYSVOL()
 
         if self.bhout:
             self.outputToBloodhoundJson()
@@ -242,7 +244,7 @@ class EnumAD():
             user = json.loads(self.people[idx].entry_to_json())
             idx += 1    
             if user['attributes'].get('userPassword') is not None:
-                passwords[user['attributes']['name']] = user['attributes']['userPassword']
+                passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
         if len(passwords.keys()) > 0:
             with open('{0}-clearpw'.format(self.server), 'w') as f:
                 json.dump(passwords, f, sort_keys=False) 
@@ -328,7 +330,6 @@ class EnumAD():
                     # Since the first entry is the DC we dont want that
                     for item in paths[1:]:
                         if '.xml' in item.split('\\')[-1]:
-                            print('item .xml: ' + str(item))
                             with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
                                 smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
                             with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
@@ -360,7 +361,7 @@ class EnumAD():
 
 
         except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
-            print('[ ' + colored('ERROR', 'red') +' ] Some error occoured while searching SYSVOL'.format(self.server))
+            print('[ ' + colored('ERROR', 'red') + ' ] Some error occoured while searching SYSVOL')
         else:
             smbconn.close()
 
@@ -378,12 +379,12 @@ class EnumAD():
             with self.suppressOutput():
                 opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server)
                 auth = ADAuthentication(username=self.domuser, password=self.passwd, domain=self.server)
-            try:
-                ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
-                ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
-            except (NXDOMAIN) as e:
-                # So we didnt succeed with DNS lookup. Most likely an internal, so lets try to point to the DC
-                print('[ ' + colored('WARN', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
+                try:
+                    ad = AD(auth=auth, domain=self.server, nameserver=None, dns_tcp=False)
+                    ad.dns_resolve(kerberos=False, domain=self.server, options=opts)
+                except (NXDOMAIN) as e:
+                    # So we didnt succeed with DNS lookup. Most likely an internal, so lets try to point to the DC
+                    print('[ ' + colored('WARN', 'yellow') +' ] DNS lookup of Domain Controller failed - attempting to set the DC as Nameserver')
                 try:
                     ns = socket.gethostbyname(self.server)
                     opts = argparse.Namespace(dns_tcp=False, global_catalog=self.server, nameserver=ns)
@@ -400,8 +401,7 @@ class EnumAD():
                 bloodhound.run(collect=collection, num_workers=40, disable_pooling=False)
             print('[ ' + colored('OK', 'green') +' ] BloodHound output generated')
         except Exception as e:
-            print(e)
-            print('[ ' + colored('ERROR', 'red') +' ] Generating BloodHound output failed')
+            print('[ ' + colored('ERROR', 'red') + f' ] Generating BloodHound output failed: {e}')
 
 
     def sortComputers(self):
@@ -650,9 +650,9 @@ class EnumAD():
                     for key, value in user_tickets.items():
                         f.write('{0}:{1}\n'.format(key, value))
                 if len(user_tickets.keys()) == 1:
-                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting'.format(len(user_tickets.keys())))
+                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
                 else:
-                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} tickets for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
             else:
                 print('[ ' + colored('OK', 'green') +' ] Got {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
 
@@ -667,7 +667,7 @@ class EnumAD():
                 'legacy', 'pass', 'password', 'pwd', 'passcode'
         ]
         excludeTerms = [
-                'badPasswordTime', 'badPwdCount', 'pwdLastSet'
+                'badPasswordTime', 'badPwdCount', 'pwdLastSet', 'legacyExchangeDN'
         ]
         possiblePass = {}
         idx = 0
@@ -675,7 +675,16 @@ class EnumAD():
             user = json.loads(ldapdump[idx].entry_to_json())
             for prop, value in user['attributes'].items():
                 if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
-                    possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
+                    try:
+                        possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
+                    except KeyError:
+                        # Could be a service user instead
+                        try:
+                            possiblePass[user['attributes']['servicePrincipalName'][0]] = value[0]
+                        except KeyError:
+                            # Don't know which type
+                            continue
+
             idx += 1
         if len(possiblePass) > 0:
             print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties')
@@ -695,6 +704,8 @@ class EnumAD():
 
 
     def entroPass(self, user, password):
+        if not password:
+            return None
         # First check if it is a clear text
         dc_test_conn = Server(self.server, get_info=ALL)
         test_conn = Connection(dc_test_conn, user=user, password=password)
@@ -717,7 +728,10 @@ class EnumAD():
 
         # Attempt for base64
         # Could be base64, lets try
-        pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
+        try:
+            pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
+        except base64.binascii.Error:
+            return None
     
         # Attempt decoded PW
         dc_test_conn = Server(self.server, get_info=ALL)
@@ -758,6 +772,7 @@ if __name__ == "__main__":
     parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
     parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
     parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting', action='store_true')
+    parser.add_argument('-sysvol', help='Search sysvol for GPOs with cpassword and decrypt it', action='store_true')
     parser.add_argument('--all', help='Run all checks', action='store_true')
     parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
 
@@ -796,7 +811,7 @@ if __name__ == "__main__":
     if args.out_file:
         file_to_write = args.out_file
 
-    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.user)
+    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.user)
 
     # Just print a blank line for output sake
     print('')
