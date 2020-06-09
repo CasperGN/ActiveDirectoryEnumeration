@@ -166,7 +166,7 @@ class EnumAD():
                 else:
                     print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # TODO: Catch individual exceptions instead
-        except Exception as e:
+        except Exception:
             if self.ldaps:
                 print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
@@ -240,7 +240,7 @@ class EnumAD():
     def checkForPW(self):
         passwords = {}
         idx = 0
-        for entry in self.people:
+        for _ in self.people:
             user = json.loads(self.people[idx].entry_to_json())
             idx += 1    
             if user['attributes'].get('userPassword') is not None:
@@ -276,7 +276,7 @@ class EnumAD():
                 "Windows Server 2019": []
         }
         idx = 0
-        for entry in self.computers:
+        for _ in self.computers:
             computer = json.loads(self.computers[idx].entry_to_json())
             idx += 1    
 
@@ -296,7 +296,7 @@ class EnumAD():
                     f.write('{0}: {1}\n'.format(key, item))
                 break
 
-        print('[ ' + colored('OK', 'green') +' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
+        print('[ ' + colored('OK', 'green') + ' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
     
 
     def checkSYSVOL(self):
@@ -360,7 +360,7 @@ class EnumAD():
                 print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpasswords in GPOs on SYSVOL share'.format(len(cpasswords.keys())))
 
 
-        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+        except (SessionError, UnicodeEncodeError, NetBIOSError):
             print('[ ' + colored('ERROR', 'red') + ' ] Some error occoured while searching SYSVOL')
         else:
             smbconn.close()
@@ -432,9 +432,9 @@ class EnumAD():
                     for share in dirs:
                         self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
                         try:
-                            path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                            _ = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
                             self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
-                        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+                        except (SessionError, UnicodeEncodeError, NetBIOSError):
                             # Didnt have permission, all good
                             # Im second guessing the below adding to the JSON file as we're only interested in the listable directories really
                             #self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
@@ -442,14 +442,14 @@ class EnumAD():
                     smbconn.logoff()
                     progBar.update(prog + 1)
                     prog += 1
-                except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError) as err:
+                except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError):
                     # TODO: Examine why we sometimes get:
                     # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
                     # on healthy shares. It seems to be reported with CIF shares 
                     progBar.update(prog + 1)
                     prog += 1
                     continue
-        except ValueError as e:
+        except ValueError:
             # We reached end of progressbar, continue since we finish below
             pass
         progBar.finish()
@@ -457,7 +457,7 @@ class EnumAD():
 
         availDirs = []
         for key, value in self.smbBrowseable.items():
-            for k, v in value.items():
+            for _, v in value.items():
                 if v:
                     availDirs.append(key)
 
@@ -607,7 +607,7 @@ class EnumAD():
         client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         try:
             # We need to take the domain from the user@domain since it *could* be a cross-domain user
-            tgt, cipher, oldSession, newSession = getKerberosTGT(client, '', userDomain, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=None)
+            tgt, cipher, _, newSession = getKerberosTGT(client, '', userDomain, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=None)
 
             TGT = {}
             TGT['KDC_REP'] = tgt
@@ -623,7 +623,7 @@ class EnumAD():
                     try:
                         # Get the TGS
                         serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
-                        tgs, cipher, oldSession, newSession = getKerberosTGS(serverName, userDomain, None, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
+                        tgs, cipher, _, newSession = getKerberosTGS(serverName, userDomain, None, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
                         # Decode the TGS
                         decoded = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
                         # Get different encryption types
@@ -671,7 +671,7 @@ class EnumAD():
         ]
         possiblePass = {}
         idx = 0
-        for entry in ldapdump:
+        for _ in ldapdump:
             user = json.loads(ldapdump[idx].entry_to_json())
             for prop, value in user['attributes'].items():
                 if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
@@ -753,7 +753,7 @@ class EnumAD():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='activeDirectoryEnum', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''\
+    parser = argparse.ArgumentParser(prog='activeDirectoryEnum', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
             ___        __  _            ____  _                __                   ______                    
            /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
           / /| |/ ___/ __/ / | / / _ \/ / / / / ___/ _ \/ ___/ __/ __ \/ ___/ / / / __/ / __ \/ / / / __ `__ \\
