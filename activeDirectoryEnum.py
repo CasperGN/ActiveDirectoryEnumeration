@@ -115,7 +115,7 @@ class EnumAD():
 
     def runWithoutCreds(self):
         self.CREDS = False
-        print('[ ' + colored('INFO', 'green') +' ] Attempting to get objects without credentials'.format(self.server))           
+        print('[ ' + colored('INFO', 'green') + ' ] Attempting to get objects without credentials')           
         self.passwd = ''
         self.domuser = ''
         print('')
