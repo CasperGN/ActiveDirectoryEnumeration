@@ -31,7 +31,7 @@ from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.asn1 import TGS_REP
 
 from external.bloodhound import BloodHound, resolve_collection_methods
-from external.bloodhound.ad.domain import *
+from external.bloodhound.ad.domain import AD
 from external.bloodhound.ad.authentication import ADAuthentication
 
 
