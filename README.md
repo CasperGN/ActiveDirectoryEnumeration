@@ -2,6 +2,7 @@
 [![GitHub forks](https://img.shields.io/github/forks/CasperGN/ActiveDirectoryEnumeration)](https://github.com/CasperGN/ActiveDirectoryEnumeration/network)
 [![Rawsec's CyberSecurity Inventory](https://inventory.rawsec.ml/img/badges/Rawsec-inventoried-FF5050_flat.svg)](https://inventory.rawsec.ml/tools.html#ActiveDirectoryEnumeration)
 [![GitHub license](https://img.shields.io/github/license/CasperGN/ActiveDirectoryEnumeration)](https://github.com/CasperGN/ActiveDirectoryEnumeration/blob/master/LICENSE)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCasperGN%2FActiveDirectoryEnumeration.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FCasperGN%2FActiveDirectoryEnumeration?ref=badge_shield)
   
 [![Packaging status](https://repology.org/badge/vertical-allrepos/activedirectoryenum.svg)](https://repology.org/project/activedirectoryenum/versions)  
 
@@ -88,3 +89,7 @@ Big thanks to the creators of:
 `BloodHound.py`
 
 Without the above this wrapper was not possible.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCasperGN%2FActiveDirectoryEnumeration.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FCasperGN%2FActiveDirectoryEnumeration?ref=badge_large)
