@@ -13,7 +13,7 @@ MarkupSafe==1.1.1
 progressbar==2.5
 pyasn1==0.4.8
 pycparser==2.20
-pycryptodomex==3.9.7
+pycryptodomex==3.9.8
 pyOpenSSL==19.1.0
 six==1.14.0
 termcolor==1.1.0
