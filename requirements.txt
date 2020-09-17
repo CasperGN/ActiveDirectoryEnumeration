@@ -1,5 +1,5 @@
 cffi==1.14.0
-Click==7.0
+Click==7.1.2
 cryptography==2.8
 dnspython==1.16.0
 Flask==1.1.1
