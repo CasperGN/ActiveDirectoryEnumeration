@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-import warnings
-from ldap3 import Server, Connection, ALL, SUBTREE
+from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
 from impacket.smbconnection import SessionError
@@ -8,14 +7,15 @@ from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
-import contextlib, argparse, textwrap, sys, socket, json, re, os, base64
+from impacket.dcerpc.v5 import srvs
+import contextlib, argparse, sys, socket, json, re, os, base64
 from Cryptodome.Cipher import AES
 from dns.resolver import NXDOMAIN
 
 # Thanks SecureAuthCorp for GetNPUsers.py
 # For Kerberos preauthentication
 from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, AS_REP, seq_set, seq_set_iter
+from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, KRB_ERROR, AS_REP, seq_set, seq_set_iter
 from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 from impacket.krb5.types import KerberosTime, Principal
 from pyasn1.codec.der import decoder, encoder
@@ -25,19 +25,19 @@ import datetime, random
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
+from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
 from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.asn1 import TGS_REP
 
-from external.bloodhound import BloodHound, resolve_collection_methods
-from external.bloodhound.ad.domain import AD
-from external.bloodhound.ad.authentication import ADAuthentication
+from .bloodhound import BloodHound, resolve_collection_methods
+from .bloodhound.ad.domain import AD
+from .bloodhound.ad.authentication import ADAuthentication
 
 
 class EnumAD():
 
     def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, searchSysvol, domuser=None, computer=None):
-        warnings.warn("Deprecation warning: This module receives no new updates. Use pip package instead", UserWarning)
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
@@ -599,9 +599,8 @@ class EnumAD():
 
         idx = 0
         for entry in self.spn:
-            # TODO: Consider a better name than spn since spn is referenced below. It's confusing.
-            spn = json.loads(self.spn[idx].entry_to_json())
-            users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
+            spns = json.loads(self.spn[idx].entry_to_json())
+            users_spn[self.splitJsonArr(spns['attributes'].get('name'))] = self.splitJsonArr(spns['attributes'].get('servicePrincipalName')) 
             idx += 1    
 
         # Get TGT for the supplied user
@@ -615,12 +614,11 @@ class EnumAD():
             TGT['cipher'] = cipher
             TGT['sessionKey'] = newSession
     
-            for user, spns in users_spn.items():
-                if isinstance(spns, list):
+            for user, spn in users_spn.items():
+                if isinstance(spn, list):
                     # We only really need one to get a ticket
-                    spn = spns[0] # lgtm [py/multiple-definition]
+                    spn = spn[0]
                 else:
-                    spn = spns
                     try:
                         # Get the TGS
                         serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
@@ -750,69 +748,3 @@ class EnumAD():
                 print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
                 print('')
                 return user, pw
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='activeDirectoryEnum', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-            ___        __  _            ____  _                __                   ______                    
-           /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
-          / /| |/ ___/ __/ / | / / _ \/ / / / / ___/ _ \/ ___/ __/ __ \/ ___/ / / / __/ / __ \/ / / / __ `__ \\
-         / ___ / /__/ /_/ /| |/ /  __/ /_/ / / /  /  __/ /__/ /_/ /_/ / /  / /_/ / /___/ / / / /_/ / / / / / /
-        /_/  |_\___/\__/_/ |___/\___/_____/_/_/   \___/\___/\__/\____/_/   \__, /_____/_/ /_/\__,_/_/ /_/ /_/ 
-                                                                          /____/                             
-
-    |*----------------------------------------------------------------------------------------------------------*|
-
-            '''))
-    parser.add_argument('dc', type=str, help='Hostname of the Domain Controller')
-    parser.add_argument('-o', '--out-file', type=str, help='Path to output file. If no path, CWD is assumed (default: None)')
-    parser.add_argument('-u', '--user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
-    parser.add_argument('-s', '--secure', help='Try to estalish connection through LDAPS', action='store_true')
-    parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares on all computer objects fetched', action='store_true')
-    parser.add_argument('-kp', '--kerberos_preauth', help='Attempt to gather users that does not require Kerberos preauthentication', action='store_true')
-    parser.add_argument('-bh', '--bloodhound', help='Output data in the format expected by BloodHound', action='store_true')
-    parser.add_argument('-spn', help='Attempt to get all SPNs and perform Kerberoasting', action='store_true')
-    parser.add_argument('-sysvol', help='Search sysvol for GPOs with cpassword and decrypt it', action='store_true')
-    parser.add_argument('--all', help='Run all checks', action='store_true')
-    parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
-
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        #warnings.warn("Deprecation warning: This module receives no new updates. Use pip package instead", UserWarning)
-        sys.exit(1)
-
-    args = parser.parse_args()
-
-    # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
-    domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
-    userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
-
-    domainMatch = domainRE.findall(args.dc)
-
-    if not domainMatch:
-        print('[ ' + colored('ERROR', 'red') +' ] Domain flag has to be in the form "domain.local"')
-        sys.exit(1)
-
-    if args.all:
-        args.smb = True
-        args.kerberos_preauth = True
-        args.bloodhound = True
-        args.spn = True
-    if args.no_creds:
-        args.user = False
-    else:
-        userMatch = userRE.findall(args.user)
-        if not userMatch:
-            print('[ ' + colored('ERROR', 'red') +' ] User flag has to be in the form "user@domain.local"')
-            sys.exit(1)
-
-    
-    # Boolean flow control flags
-    file_to_write = None
-    if args.out_file:
-        file_to_write = args.out_file
-
-    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.user)
-
-    # Just print a blank line for output sake
-    print('')

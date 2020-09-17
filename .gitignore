@@ -1,3 +1,6 @@
 *.pyc
 *.json
 *-jtr-hashes
+ActiveDirectoryEnum.egg-info/*
+build/*
+dist/*

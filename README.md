@@ -45,13 +45,8 @@ optional arguments:
 
 Run installation through pip3:
 ```
-pip3 install .
-```
-Since it is not yet distributed through pip packages yet this is the way, for now.
-The script can now be called as a module or be imported:
-
-```
-python3 -m activeDirectoryEnum 
+pip3 install ActiveDirectoryEnum
+python -m ade
 ```
   
 If you run BlackArch, ActiveDirectoryEnum is available through `pacman` as such:  

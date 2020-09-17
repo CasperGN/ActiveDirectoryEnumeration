@@ -9,7 +9,7 @@ with open('requirements.txt', 'r') as req:
 
 setuptools.setup(
         name = 'ActiveDirectoryEnum',
-        version = '0.3.2',
+        version = '0.4.6',
         author = 'Casper G. Nielsen',
         author_email = 'whopsec@protonmail.com',
         description = 'Enumerate Active Directory with standard vectors',
@@ -18,6 +18,7 @@ setuptools.setup(
         url = 'https://github.com/CasperGN/ActiveDirectoryEnumeration',
         packages = setuptools.find_packages(),
         install_requires = reqs, 
+        include_package_data = True,
         classifiers = [
             'Programming Language :: Python :: 3',
             'License :: OSI Approved :: MIT License',
@@ -25,5 +26,4 @@ setuptools.setup(
         ],
         keywords='active-directory pentesting enumeration',
         python_requires = '>=3.4',
-        scripts=['activeDirectoryEnum.py'],
 )
