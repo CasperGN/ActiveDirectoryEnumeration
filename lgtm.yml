@@ -1,0 +1,13 @@
+path_classifiers:
+  library:
+    - "**/bloodhound/**/*.py"
+
+queries:
+  - exclude: "*"
+
+extraction: 
+  python:
+    python_setup:
+      requirements_files:
+        - required-packages.txt
+    setup_py: setup.py
