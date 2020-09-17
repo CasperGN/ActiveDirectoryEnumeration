@@ -4,7 +4,6 @@ import argparse
 import textwrap
 import sys
 import re
-import os
 
 parser = argparse.ArgumentParser(prog='ade', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
             ___        __  _            ____  _                __                   ______                    

@@ -599,8 +599,8 @@ class EnumAD():
 
         idx = 0
         for entry in self.spn:
-            spn = json.loads(self.spn[idx].entry_to_json())
-            users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
+            spns = json.loads(self.spn[idx].entry_to_json())
+            users_spn[self.splitJsonArr(spns['attributes'].get('name'))] = self.splitJsonArr(spns['attributes'].get('servicePrincipalName')) 
             idx += 1    
 
         # Get TGT for the supplied user
@@ -614,12 +614,11 @@ class EnumAD():
             TGT['cipher'] = cipher
             TGT['sessionKey'] = newSession
     
-            for user, spns in users_spn.items():
-                if isinstance(spns, list):
+            for user, spn in users_spn.items():
+                if isinstance(spn, list):
                     # We only really need one to get a ticket
-                    spn = spns[0]
+                    spn = spn[0]
                 else:
-                    spn = spns
                     try:
                         # Get the TGS
                         serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
@@ -659,7 +658,6 @@ class EnumAD():
 
         except KerberosError as err:
             print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
-            pass
 
 
     def enumForCreds(self, ldapdump):
