@@ -6,7 +6,7 @@ import sys
 import re
 import os
 
-parser = argparse.ArgumentParser(prog='activeDirectoryEnum', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
+parser = argparse.ArgumentParser(prog='ade', formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
             ___        __  _            ____  _                __                   ______                    
            /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
           / /| |/ ___/ __/ / | / / _ \/ / / / / ___/ _ \/ ___/ __/ __ \/ ___/ / / / __/ / __ \/ / / / __ `__ \\
