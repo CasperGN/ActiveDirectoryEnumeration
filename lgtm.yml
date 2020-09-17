@@ -10,4 +10,7 @@ extraction:
     python_setup:
       requirements_files:
         - required-packages.txt
-    setup_py: setup.py
+      setup_py: setup.py
+    index:
+      exclude:
+        - "**/bloodhound/**/*.py"
