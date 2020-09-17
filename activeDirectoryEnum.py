@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
+from ldap3 import Server, Connection, ALL, SUBTREE
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
 from impacket.smbconnection import SessionError
@@ -7,15 +7,14 @@ from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
-from impacket.dcerpc.v5 import srvs
-import contextlib, argparse, textwrap, errno, sys, socket, json, re, os, base64
+import contextlib, argparse, textwrap, sys, socket, json, re, os, base64
 from Cryptodome.Cipher import AES
 from dns.resolver import NXDOMAIN
 
 # Thanks SecureAuthCorp for GetNPUsers.py
 # For Kerberos preauthentication
 from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, KRB_ERROR, AS_REP, seq_set, seq_set_iter
+from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, AS_REP, seq_set, seq_set_iter
 from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 from impacket.krb5.types import KerberosTime, Principal
 from pyasn1.codec.der import decoder, encoder
@@ -25,7 +24,6 @@ import datetime, random
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
-from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
 from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.asn1 import TGS_REP
@@ -599,6 +597,7 @@ class EnumAD():
 
         idx = 0
         for entry in self.spn:
+            # TODO: Consider a better name than spn since spn is referenced below. It's confusing.
             spn = json.loads(self.spn[idx].entry_to_json())
             users_spn[self.splitJsonArr(spn['attributes'].get('name'))] = self.splitJsonArr(spn['attributes'].get('servicePrincipalName')) 
             idx += 1    
@@ -617,7 +616,7 @@ class EnumAD():
             for user, spns in users_spn.items():
                 if isinstance(spns, list):
                     # We only really need one to get a ticket
-                    spn = spns[0]
+                    spn = spns[0] # lgtm [py/multiple-definition]
                 else:
                     spn = spns
                     try:
@@ -659,7 +658,6 @@ class EnumAD():
 
         except KerberosError as err:
             print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
-            pass
 
 
     def enumForCreds(self, ldapdump):
