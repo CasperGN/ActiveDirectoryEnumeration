@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import warnings
 from ldap3 import Server, Connection, ALL, SUBTREE
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
@@ -36,6 +37,7 @@ from external.bloodhound.ad.authentication import ADAuthentication
 class EnumAD():
 
     def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, searchSysvol, domuser=None, computer=None):
+        warnings.warn("Deprecation warning: This module receives no new updates. Use pip package instead", UserWarning)
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
@@ -776,6 +778,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
+        #warnings.warn("Deprecation warning: This module receives no new updates. Use pip package instead", UserWarning)
         sys.exit(1)
 
     args = parser.parse_args()
