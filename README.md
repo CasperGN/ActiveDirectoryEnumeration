@@ -4,9 +4,9 @@
 
 ## ADE - ActiveDirectoryEnum
 ```
-usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-s] [-smb] [-kp]
-                           [-bh] [-spn] [--all] [--no-creds]
-                           dc
+ python -m ade
+usage: ade [-h] [--dc DC] [-o OUT_FILE] [-u USER] [-s] [-smb] [-kp] [-bh] [-spn] [-sysvol] [--all] [--no-creds] [--dry-run]
+           [--exploit EXPLOIT]
 
         ___        __  _            ____  _                __                   ______                    
        /   | _____/ /_(_)   _____  / __ \(_)_______  _____/ /_____  _______  __/ ____/___  __  ______ ___ 
@@ -15,30 +15,39 @@ usage: activeDirectoryEnum [-h] [-o OUT_FILE] [-u USER] [-s] [-smb] [-kp]
     /_/  |_\___/\__/_/ |___/\___/_____/_/_/   \___/\___/\__/\____/_/   \__, /_____/_/ /_/\__,_/_/ /_/ /_/ 
                                                                       /____/                             
 
-|*----------------------------------------------------------------------------------------------------------*|
-
-positional arguments:
-  dc                    Hostname of the Domain Controller
+/*----------------------------------------------------------------------------------------------------------*/
 
 optional arguments:
   -h, --help            show this help message and exit
+  --dc DC               Hostname of the Domain Controller
   -o OUT_FILE, --out-file OUT_FILE
-                        Path to output file. If no path, CWD is assumed
-                        (default: None)
-  -u USER, --user USER  Username of the domain user to query with. The
-                        username has to be domain name as `user@domain.org`
+                        Path to output file. If no path, CWD is assumed (default: None)
+  -u USER, --user USER  Username of the domain user to query with. The username has to be domain name as `user@domain.org`
   -s, --secure          Try to estalish connection through LDAPS
-  -smb, --smb           Force enumeration of SMB shares on all computer
-                        objects fetched
+  -smb, --smb           Force enumeration of SMB shares on all computer objects fetched
   -kp, --kerberos_preauth
-                        Attempt to gather users that does not require Kerberos
-                        preauthentication
+                        Attempt to gather users that does not require Kerberos preauthentication
   -bh, --bloodhound     Output data in the format expected by BloodHound
   -spn                  Attempt to get all SPNs and perform Kerberoasting
   -sysvol               Search sysvol for GPOs with cpassword and decrypt it
   --all                 Run all checks
   --no-creds            Start without credentials
+  --dry-run             Don't execute a test but run as if. Used for testing params etc.
+  --exploit EXPLOIT     Show path to PoC exploit code
 
+```
+
+The new inclusion of imbedded exploits can yield results such as:
+```
+...
+[ WARN ] DC may be vulnerable to: [ cve-2020-1472 ]
+...
+```
+
+To query an exploit do for PoC code:
+```
+$ python -m ade --exploit cve-2020-1472
+Exploit for: cve-2020-1472 can be found at: https://github.com/dirkjanm/CVE-2020-1472
 ```
 
 ## Install
