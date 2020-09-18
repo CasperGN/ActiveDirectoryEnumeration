@@ -22,65 +22,91 @@ def test_user_arg():
     assert wrapper.type == SystemExit
     assert wrapper.value.code == 1
 
-def test_init_args():
+def test_init_args(capfd):
     # Test init of EnumAD
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None False False False False False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_o():
+
+def test_init_args_o(capfd):
     # Test init of EnumAD -o
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-o', 'some/path', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-o', 'some/path', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False some/path False False False False False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_s():
+
+def test_init_args_s(capfd):
     # Test init of EnumAD -s
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-s', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-s', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "True None False False False False False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_smb():
+
+def test_init_args_smb(capfd):
     # Test init of EnumAD -smb
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-smb', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-smb', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None False False False True False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_kp():
+
+def test_init_args_kp(capfd):
     # Test init of EnumAD -kp
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-kp', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-kp', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None False True False False False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_bh():
+
+def test_init_args_bh(capfd):
     # Test init of EnumAD -bh
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-bh', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-bh', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None True False False False False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_spn():
+
+def test_init_args_spn(capfd):
     # Test init of EnumAD -spn
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-spn', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-spn', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None False False True False False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_sysvol():
+
+def test_init_args_sysvol(capfd):
     # Test init of EnumAD -sysvol
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '-sysvol', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '-sysvol', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None False False False False True" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
 
-def test_init_args_all():
+
+def test_init_args_all(capfd):
     # Test init of EnumAD -all
-    with pytest.raises(SystemExit) as wrapper:
-        main(['domain.local', '-u', 'johndoe@domain.local', '--all', '--dry-run'])
-    assert wrapper.type == SystemExit
-    assert wrapper.value.code == 0
+    main(['domain.local', '-u', 'johndoe@domain.local', '--all', '--dry-run'])
+    out, err = capfd.readouterr()
+    assert "domain.local" in out
+    assert "johndoe@domain.local" in out
+    assert "False None True True True True False" in out
+    assert "['domain', 'local'] dc=domain,dc=local," in out
