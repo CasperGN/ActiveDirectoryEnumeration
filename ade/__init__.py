@@ -23,6 +23,7 @@ from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
 from binascii import hexlify
 import datetime, random
+from .enumerate import enumerate
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
@@ -80,7 +81,7 @@ class EnumAD():
             self.runWithCreds()
         else:
             self.runWithoutCreds()
-       
+               
 
     def runWithCreds(self):
         self.CREDS = True
@@ -91,6 +92,8 @@ class EnumAD():
 
         if self.output:
             self.write_file()
+
+        self.enumerate_names()
        
         self.checkForPW()
         self.checkOS()
@@ -129,6 +132,8 @@ class EnumAD():
         self.bind()
         self.search()
 
+        self.enumerate_names()
+
         if self.output:
             self.write_file()
        
@@ -140,7 +145,6 @@ class EnumAD():
         print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find useable info as anonymous user, please gather credentials and run again')
         exit(0)
 
-    
     @contextlib.contextmanager
     def suppressOutput(self):
         with open(os.devnull, 'w') as devnull:
@@ -237,7 +241,13 @@ class EnumAD():
         if len(self.deletedUsers) > 0:
             print('[ ' + colored('INFO', 'green') +' ] Searching for juicy info in deleted users')
             self.enumForCreds(self.deletedUsers)
-        
+
+
+    def enumerate_names(self):
+        enum = enumerate.Enumerate(self.computers)
+        enum.enumerate_server_names()
+        print(enum.results)
+
 
     '''
         Since it sometimes is real that the property 'userPassword:' is set
@@ -252,7 +262,7 @@ class EnumAD():
             if user['attributes'].get('userPassword') is not None:
                 passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
         if len(passwords.keys()) > 0:
-            with open('{0}-clearpw'.format(self.server), 'w') as f:
+            with open(f'{self.server}-clearpw', 'w') as f:
                 json.dump(passwords, f, sort_keys=False) 
 
         if len(passwords.keys()) == 1:
