@@ -39,4 +39,4 @@ jobs:
         python setup.py sdist bdist_wheel
     - name: Test with pytest
       run: |
-        pytest --cov=ade tests/
+        pytest --cov=ade test/
