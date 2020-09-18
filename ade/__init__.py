@@ -80,7 +80,7 @@ class EnumAD():
             self.runWithCreds()
         else:
             self.runWithoutCreds()
-       
+            
 
     def runWithCreds(self):
         self.CREDS = True
@@ -88,6 +88,8 @@ class EnumAD():
             self.passwd = str(getpass())
         self.bind()
         self.search()
+
+        self.testExploits()
 
         if self.output:
             self.write_file()
@@ -129,6 +131,8 @@ class EnumAD():
         self.bind()
         self.search()
 
+        self.testExploits()
+
         if self.output:
             self.write_file()
        
@@ -148,6 +152,16 @@ class EnumAD():
                 yield (err, out)
 
 
+    def testExploits(self):
+        from .exploits import exploits
+        exp = exploits.Exploits(self.server, self.computers[0]["name"])
+        
+        if len(exp.vulnerable) > 0:
+            print('[ ' + colored('WARN', 'yellow') + f' ] DC may be vulnerable to: {exp.vulnerable}')
+        else:
+            print('\033[1A\r[ ' + colored('OK', 'green') + ' ] DC not vulnerable to included exploits')
+
+
     def bind(self): 
         try:
             if self.ldaps:
@@ -160,7 +174,7 @@ class EnumAD():
                     print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
                     sys.exit(1)
                 else:
-                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
+                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))
             else:
                 self.dc_conn = Server(self.server, get_info=ALL)
                 self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)

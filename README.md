@@ -61,6 +61,8 @@ pacman -S activedirectoryenum
 - [X] Dump AD as BloodHound JSON files 
 - [X] Searching GPOs in SYSVOL for cpassword and decrypting  
 - [X] Run without creds and attempt to gather for further enumeration during the run
+- [X] Sample exploits included:
+ - CVE-2020-1472
 
 ## Collaboration
 
@@ -75,9 +77,10 @@ I only ask that:
 ## Thanks & Acknowledgements
 
 Big thanks to the creators of:
-`Impacket`
-`BloodHound`
-`BloodHound.py`
+`Impacket` [@github](https://github.com/SecureAuthCorp/impacket)
+`BloodHound` [@github](https://github.com/BloodHoundAD/BloodHound)
+`BloodHound.py` [@github](https://github.com/fox-it/BloodHound.py)
+`CVE-2020-1472` by Tom Tervoort of [Secura](https://github.com/SecuraBV/CVE-2020-1472)
 
 Without the above this wrapper was not possible.
 
