@@ -1,6 +1,11 @@
+.coverage
 *.pyc
 *.json
 *-jtr-hashes
+pyvenv.cfg
 ActiveDirectoryEnum.egg-info/*
 build/*
 dist/*
+bin/*
+lib/*
+lib64
