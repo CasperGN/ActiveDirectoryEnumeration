@@ -1,0 +1,4 @@
+[run]
+omit =
+    # We don't want to go through bloodhound
+    */bloodhound/*
