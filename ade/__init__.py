@@ -74,7 +74,7 @@ class EnumAD():
         # TODO: Figure a good way to go through the code dryrun
         if dryrun:
             print(self.server, self.domuser, self.ldaps, self.output, self.bhout, self.kpre, self.spnEnum, self.enumsmb, self.searchSysvol, self.ou_structure, self.dc_string)
-            sys.exit(0)
+            return
 
         if domuser is not False:
             self.runWithCreds()
