@@ -1,4 +1,5 @@
 #!/usr/bin/env python
 import ade
+import sys
 
-ade.main()
+ade.main(sys.argv)

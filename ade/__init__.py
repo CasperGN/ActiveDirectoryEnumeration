@@ -787,7 +787,7 @@ def main(args):
         parser.print_help(sys.stderr)
         sys.exit(0)
 
-    args = parser.parse_args(args)
+    args = parser.parse_args()
 
     # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
