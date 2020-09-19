@@ -91,6 +91,7 @@ class EnumAD():
         else:
             self.runWithoutCreds()
         
+        self.enumDeleted()
         self.enumerate_names()
         self.checkForPW()
         self.checkOS()
@@ -107,6 +108,9 @@ class EnumAD():
         self.bind()
         self.search()
 
+        if self.output:
+            self.write_file()
+       
         if self.searchSysvol:
             self.checkSYSVOL()
 
@@ -139,7 +143,7 @@ class EnumAD():
         self.domuser = ''
         print('')
 
-        self.bind()
+        self.bind()        
         self.search()
        
         self.enumForCreds(self.people)
@@ -151,6 +155,26 @@ class EnumAD():
         with open(os.devnull, 'w') as devnull:
             with contextlib.redirect_stderr(devnull) as err, contextlib.redirect_stdout(devnull) as out:
                 yield (err, out)
+
+
+    def enumDeleted(self):
+        if len(self.deletedUsers) > 0:
+            print('[ ' + colored('INFO', 'green') +' ] Searching for juicy info in deleted users')
+            self.enumForCreds(self.deletedUsers)
+
+
+    def testExploits(self):
+        from .exploits import exploits
+        print('[ ' + colored('OK', 'green') +' ] Attempting to run imbedded exploits...')
+        exp = exploits.Exploits(self.server, self.computers[0]["name"])
+        
+        if len(exp.vulnerable) > 0:
+            cves = ""
+            for exploit in exp.vulnerable:
+                    cves += f"{exploit}, "
+            print('[ ' + colored('WARN', 'yellow') + f' ] DC may be vulnerable to: [ ' + colored(cves[:-2], 'green') + ' ]')
+        else:
+            print('[ ' + colored('OK', 'green') + ' ] DC not vulnerable to included exploits')
 
 
     def bind(self): 
@@ -739,7 +763,8 @@ def main(args):
         /*----------------------------------------------------------------------------------------------------------*/
 
                 '''))
-    parser.add_argument('dc', type=str, help='Hostname of the Domain Controller')
+
+    parser.add_argument('--dc', type=str, help='Hostname of the Domain Controller')
     parser.add_argument('-o', '--out-file', type=str, help='Name prefix of output files (default: the name of the dc)')
     parser.add_argument('-u', '--user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
     parser.add_argument('-s', '--secure', help='Try to estalish connection through LDAPS', action='store_true')
@@ -751,12 +776,29 @@ def main(args):
     parser.add_argument('--all', help='Run all checks', action='store_true')
     parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
     parser.add_argument('--dry-run', help='Don\'t execute a test but run as if. Used for testing params etc.', action='store_true')
+    parser.add_argument('--exploit', type=str, help='Show path to PoC exploit code')
+
+    exploits = {
+        "cve-2020-1472": "https://github.com/dirkjanm/CVE-2020-1472",
+    }
 
     if len(args) == 1:
         parser.print_help(sys.stderr)
         sys.exit(0)
 
     args = parser.parse_args()
+
+    if args.exploit:
+        if args.exploit.lower() in exploits.keys():
+            print('Exploit for: ' + colored(args.exploit.lower(), 'green') + f' can be found at: {exploits[args.exploit.lower()]}')
+            sys.exit(0)
+        else:
+            print(f'{args.exploit.lower()} not in imbedded exploits')
+            sys.exit(0)
+
+    if not args.dc:
+        print("--dc argument is required")
+        sys.exit(0)
 
     # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
