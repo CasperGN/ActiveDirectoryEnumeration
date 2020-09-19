@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
 from progressbar import Bar, Percentage, ProgressBar, ETA
-from ldap3.core.exceptions import LDAPKeyError
+from ldap3.core.exceptions import LDAPKeyError, LDAPBindError, LDAPSocketOpenError
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from getpass import getpass
@@ -25,6 +25,7 @@ from binascii import hexlify
 import datetime
 import random
 from .modEnumerator.modEnumerator import ModEnumerator
+from .connectors.connectors import Connectors
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
@@ -61,6 +62,7 @@ class EnumAD():
         self.ldapProps = ["*"]
 
         # Initialize modules
+        self.connectors = Connectors()
         self.enumerator = ModEnumerator()
 
 
@@ -154,28 +156,13 @@ class EnumAD():
     def bind(self): 
         try:
             if self.ldaps:
-                self.dc_conn = Server(self.server, port=636, use_ssl=True, get_info='ALL')
-                self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
-                self.conn.bind()
-                self.conn.start_tls()
-                # Validate the login (bind) request
-                if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
-                    sys.exit(1)
-                else:
-                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))           
+                self.conn = self.connectors.ldap_connector(self.server, True, self.domuser, self.passwd)
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))
             else:
-                self.dc_conn = Server(self.server, get_info=ALL)
-                self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
-                self.conn.bind()
-                # Validate the login (bind) request
-                if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
-                    sys.exit(1)
-                else:
-                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
+                self.conn = self.connectors.ldap_connector(self.server, False, self.domuser, self.passwd)
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # TODO: Catch individual exceptions instead
-        except Exception:
+        except (LDAPBindError, LDAPSocketOpenError):
             if self.ldaps:
                 print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
@@ -251,15 +238,12 @@ class EnumAD():
         we test for it and dump the passwords
     '''
     def checkForPW(self):
-        idx = 0
-        for _ in self.people:
-            user = json.loads(self.people[idx].entry_to_json())
-            idx += 1    
-            if user['attributes'].get('userPassword') is not None:
-                self.passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
+        passwords = self.enumerator.enumerate_for_cleartext_passwords(self.people, self.server)
+        self.passwords = { **passwords, **self.passwords }
+
         if len(self.passwords.keys()) > 0:
             with open(f'{self.server}-clearpw', 'w') as f:
-                json.dump(self.passwords, f, sort_keys=False) 
+                json.dump(self.passwords, f, sort_keys=False)
 
         if len(self.passwords.keys()) == 1:
             print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(self.passwords.keys())))
