@@ -1,3 +1,6 @@
+exclude ade/__pycache__/*
+recursive-include ade/cve_2020_1472/
+recursive-include ade/exploits/
 include requirements.txt
 exclude .github/*
 exclude .gitignore
