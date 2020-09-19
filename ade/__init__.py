@@ -242,7 +242,7 @@ class EnumAD():
         self.passwords = { **passwords, **self.passwords }
 
         if len(self.passwords.keys()) > 0:
-            with open(f'{self.server}-clearpw', 'w') as f:
+            with open(f'{self.output}-clearpw', 'w') as f:
                 json.dump(self.passwords, f, sort_keys=False)
 
         if len(self.passwords.keys()) == 1:
