@@ -38,6 +38,36 @@ class ModEnumerator():
 
         return results
 
+    def enumerate_os_version(self, computerobjects: ldap3.Entry) -> dict:
+        '''Return a dict of key(os_version) and value(computers with said os)
+
+        '''
+        os_json = {
+                # Should perhaps include older version
+                "Windows XP": [],
+                "Windows Server 2008": [],
+                "Windows 7": [],
+                "Windows Server 2012": [],
+                "Windows 10": [],
+                "Windows Server 2016": [],
+                "Windows Server 2019": []
+        }
+        idx = 0
+        for _ in computerobjects:
+            computer = json.loads(computerobjects[idx].entry_to_json())
+            idx += 1    
+
+            for os_version in os_json.keys():
+                try:
+                    if os_version in computer['attributes'].get('operatingSystem')[0]:
+                        if computer['attributes']['dNSHostName'][0] not in os_json[os_version]:
+                            os_json[os_version].append(computer['attributes']['dNSHostName'][0])
+                except TypeError:
+                    # computer['attributes'].get('operatingSystem') is of NoneType, just continue
+                    continue
+
+        return os_json
+
     
     def enumerate_for_cleartext_passwords(self, peopleobjects: ldap3.Entry, server: str) -> dict:
         '''Return a dict of key(username) and value(password)
