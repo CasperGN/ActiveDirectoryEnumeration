@@ -3,6 +3,7 @@
 *.json
 *-jtr-hashes
 pyvenv.cfg
+__pycache__/*
 ActiveDirectoryEnum.egg-info/*
 build/*
 dist/*
