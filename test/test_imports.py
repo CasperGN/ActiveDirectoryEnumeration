@@ -22,22 +22,4 @@ def test_ade_imports():
     import binascii
     import datetime
     import random
-
-def test_bloodhound_imports():
-    import ade.bloodhound
-    import logging
-    import time
-    import traceback
-    import uuid
-    import future
-    import __future__
-    import struct
-    import threading
-    import io
-    import pprint
-    import queue
-    import codecs
-    import collections
-    import ctypes
-    import ast
-    import string
+    import bloodhound
