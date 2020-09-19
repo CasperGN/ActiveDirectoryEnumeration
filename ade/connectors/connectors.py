@@ -34,3 +34,23 @@ class Connectors():
                 raise LDAPBindError
         
         return conn
+
+    
+    def winrm_connector(self):
+        pass
+
+
+    def rpc_connector(self):
+        pass
+
+
+    def smb_connector(self):
+        pass
+
+    
+    def ftp_connector(self):
+        pass
+
+
+    def smtp_connector(self):
+        pass
