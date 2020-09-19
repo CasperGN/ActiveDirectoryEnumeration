@@ -260,39 +260,17 @@ class EnumAD():
         enumeration afterwards
     '''
     def checkOS(self):
-
-        os_json = {
-                # Should perhaps include older version
-                "Windows XP": [],
-                "Windows Server 2008": [],
-                "Windows 7": [],
-                "Windows Server 2012": [],
-                "Windows 10": [],
-                "Windows Server 2016": [],
-                "Windows Server 2019": []
-        }
-        idx = 0
-        for _ in self.computers:
-            computer = json.loads(self.computers[idx].entry_to_json())
-            idx += 1    
-
-            for os_version in os_json.keys():
-                try:
-                    if os_version in computer['attributes'].get('operatingSystem'):
-                        os_json[os_version].append(computer['attributes']['dNSHostName'])
-                except TypeError:
-                    # computer['attributes'].get('operatingSystem') is of NoneType, just continue
-                    continue
+        os_json = self.enumerator.enumerate_os_version(self.computers)
 
         for key, value in os_json.items():
             if len(value) == 0:
                 continue
-            with open('{0}-oldest-OS'.format(self.server), 'w') as f:
+            with open(f'{self.output}-oldest-OS', 'w') as f:
                 for item in value:
                     f.write('{0}: {1}\n'.format(key, item))
                 break
 
-        print('[ ' + colored('OK', 'green') + ' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
+        print('[ ' + colored('OK', 'green') + f' ] Wrote hosts with oldest OS to {self.output}-oldest-OS')
     
 
     def checkSYSVOL(self):
