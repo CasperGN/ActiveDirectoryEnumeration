@@ -1,4 +1,3 @@
-recursive-include ade/external/*
 include requirements.txt
 exclude .github/*
 exclude .gitignore
