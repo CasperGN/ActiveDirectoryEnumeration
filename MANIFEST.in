@@ -1,4 +1,6 @@
 recursive-include ade/external/*
+recursive-include ade/modEnumerator/*
+recursive-include ade/connectors/*
 include requirements.txt
 exclude .github/*
 exclude .gitignore
