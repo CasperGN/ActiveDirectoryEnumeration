@@ -170,9 +170,9 @@ class EnumAD():
             cves = ""
             for exploit in exp.vulnerable:
                     cves += f"{exploit}, "
-            print('\033[1A\r[ ' + colored('WARN', 'yellow') + f' ] DC may be vulnerable to: [ ' + colored(cves[:-2], 'green') + ' ]')
+            print('[ ' + colored('WARN', 'yellow') + f' ] DC may be vulnerable to: [ ' + colored(cves[:-2], 'green') + ' ]')
         else:
-            print('\033[1A\r[ ' + colored('OK', 'green') + ' ] DC not vulnerable to included exploits')
+            print('[ ' + colored('OK', 'green') + ' ] DC not vulnerable to included exploits')
 
 
     def bind(self): 
