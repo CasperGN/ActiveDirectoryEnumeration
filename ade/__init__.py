@@ -22,8 +22,9 @@ from impacket.krb5.types import KerberosTime, Principal
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
 from binascii import hexlify
-import datetime, random
-from .enumerate import enumerate
+import datetime
+import random
+from .modEnumerator.modEnumerator import ModEnumerator
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
@@ -59,6 +60,9 @@ class EnumAD():
         # At the moment we just want everything
         self.ldapProps = ["*"]
 
+        # Initialize modules
+        self.enumerator = ModEnumerator()
+
 
         # Setting lists containing elements we want from the domain controller
         self.computers = []
@@ -71,6 +75,9 @@ class EnumAD():
         self.ous = []
         self.deletedUsers = []
         self.passwd = False
+        self.passwords = {}
+        # Holds the values of servers that has been fingerprinted to a particular service
+        self.namedServers = {}
 
         # TODO: Figure a good way to go through the code dryrun
         if dryrun:
@@ -81,6 +88,14 @@ class EnumAD():
             self.runWithCreds()
         else:
             self.runWithoutCreds()
+        
+        self.enumerate_names()
+        self.checkForPW()
+        self.checkOS()
+        self.write_file()
+
+        # Unbind the connection to release the handle
+        self.conn.unbind()
                
 
     def runWithCreds(self):
@@ -90,13 +105,6 @@ class EnumAD():
         self.bind()
         self.search()
 
-        if self.output:
-            self.write_file()
-
-        self.enumerate_names()
-       
-        self.checkForPW()
-        self.checkOS()
         if self.searchSysvol:
             self.checkSYSVOL()
 
@@ -107,9 +115,7 @@ class EnumAD():
             self.enumKerbPre()
     
         if self.spnEnum:
-            self.enumSPNUsers()
-        
-        self.conn.unbind()
+            self.enumSPNUsers()     
         
         if self.enumsmb:
             # Setting variables for further testing and analysis
@@ -121,6 +127,8 @@ class EnumAD():
         # Lets clear variable now
         self.passwd = None
 
+        return
+
 
     def runWithoutCreds(self):
         self.CREDS = False
@@ -131,19 +139,10 @@ class EnumAD():
 
         self.bind()
         self.search()
-
-        self.enumerate_names()
-
-        if self.output:
-            self.write_file()
        
-        self.checkForPW()
-        self.checkOS()
-
         self.enumForCreds(self.people)
 
-        print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find useable info as anonymous user, please gather credentials and run again')
-        exit(0)
+        return
 
     @contextlib.contextmanager
     def suppressOutput(self):
@@ -244,9 +243,7 @@ class EnumAD():
 
 
     def enumerate_names(self):
-        enum = enumerate.Enumerate(self.computers)
-        enum.enumerate_server_names()
-        print(enum.results)
+        self.namedServers = self.enumerator.enumerate_server_names(self.computers)
 
 
     '''
@@ -254,23 +251,22 @@ class EnumAD():
         we test for it and dump the passwords
     '''
     def checkForPW(self):
-        passwords = {}
         idx = 0
         for _ in self.people:
             user = json.loads(self.people[idx].entry_to_json())
             idx += 1    
             if user['attributes'].get('userPassword') is not None:
-                passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
-        if len(passwords.keys()) > 0:
+                self.passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
+        if len(self.passwords.keys()) > 0:
             with open(f'{self.server}-clearpw', 'w') as f:
-                json.dump(passwords, f, sort_keys=False) 
+                json.dump(self.passwords, f, sort_keys=False) 
 
-        if len(passwords.keys()) == 1:
-            print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
-        elif len(passwords.keys()) == 0:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
+        if len(self.passwords.keys()) == 1:
+            print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(self.passwords.keys())))
+        elif len(self.passwords.keys()) == 0:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(self.passwords.keys())))
         else:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(self.passwords.keys())))
 
 
     '''
@@ -713,8 +709,9 @@ class EnumAD():
             if not self.CREDS:
                 self.domuser = usr
                 self.passwd = passwd
+                self.passwords[usr] = passwd
                 self.runWithCreds()
-                exit(0)
+                return
 
 
     def entroPass(self, user, password):
@@ -781,7 +778,7 @@ def main(args):
 
                 '''))
     parser.add_argument('dc', type=str, help='Hostname of the Domain Controller')
-    parser.add_argument('-o', '--out-file', type=str, help='Path to output file. If no path, CWD is assumed (default: None)')
+    parser.add_argument('-o', '--out-file', type=str, help='Name prefix of output files (default: the name of the dc)')
     parser.add_argument('-u', '--user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
     parser.add_argument('-s', '--secure', help='Try to estalish connection through LDAPS', action='store_true')
     parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares on all computer objects fetched', action='store_true')
@@ -824,9 +821,7 @@ def main(args):
 
 
     # Boolean flow control flags
-    file_to_write = None
-    if args.out_file:
-        file_to_write = args.out_file
+    file_to_write = args.out_file if args.out_file else f'{args.dc}'
 
     enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.dry_run, args.user)
 
