@@ -44,7 +44,7 @@ The new inclusion of imbedded exploits can yield results such as:
 ...
 ```
 
-To query an exploit do for PoC code:
+To query an exploit for PoC code:
 ```
 $ python -m ade --exploit cve-2020-1472
 Exploit for: cve-2020-1472 can be found at: https://github.com/dirkjanm/CVE-2020-1472
