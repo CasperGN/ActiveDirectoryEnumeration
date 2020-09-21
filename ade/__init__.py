@@ -163,8 +163,9 @@ class EnumAD():
 
     def testExploits(self):
         from .exploits import exploits
-        print('[ ' + colored('OK', 'green') +' ] Attempting to run imbedded exploits...')
-        exp = exploits.Exploits(self.server, self.computers[0]["name"])
+        print('[ ' + colored('INFO', 'green') +' ] Attempting to run imbedded exploits...')
+        exp = exploits.Exploits()
+        exp.run(self.server, self.computers[0]["name"])
         
         if len(exp.vulnerable) > 0:
             cves = ""
@@ -809,10 +810,6 @@ def main(args):
     parser.add_argument('--dry-run', help='Don\'t execute a test but run as if. Used for testing params etc.', action='store_true')
     parser.add_argument('--exploit', type=str, help='Show path to PoC exploit code')
 
-    exploits = {
-        "cve-2020-1472": "https://github.com/dirkjanm/CVE-2020-1472",
-    }
-
     if len(args) == 1:
         parser.print_help(sys.stderr)
         sys.exit(0)
@@ -820,8 +817,12 @@ def main(args):
     args = parser.parse_args()
 
     if args.exploit:
-        if args.exploit.lower() in exploits.keys():
-            print('Exploit for: ' + colored(args.exploit.lower(), 'green') + f' can be found at: {exploits[args.exploit.lower()]}')
+        from .exploits.exploits import Exploits
+        exp = Exploits()
+        queryResult = exp.query_exploits(args.exploit)
+
+        if queryResult:
+            print('Exploit for: ' + colored(args.exploit.lower(), 'green') + f' can be found at: {queryResult}')
             sys.exit(0)
         else:
             print(f'{args.exploit.lower()} not in imbedded exploits')
