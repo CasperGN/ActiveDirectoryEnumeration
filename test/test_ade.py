@@ -1,4 +1,4 @@
-import ade
+from ade import ade
 import pytest
 import ldap3
 import contextlib

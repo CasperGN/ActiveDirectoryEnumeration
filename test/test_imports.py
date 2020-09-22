@@ -1,6 +1,6 @@
 
 def test_ade_imports():
-    import ade
+    from ade import ade
     import termcolor
     import argparse
     import textwrap
