@@ -809,6 +809,7 @@ def main(args):
     parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
     parser.add_argument('--dry-run', help='Don\'t execute a test but run as if. Used for testing params etc.', action='store_true')
     parser.add_argument('--exploit', type=str, help='Show path to PoC exploit code')
+    parser.add_argument('--version', help='Print currently installed version', action='store_true')
 
     if len(args) == 1:
         parser.print_help(sys.stderr)
@@ -827,6 +828,12 @@ def main(args):
         else:
             print(f'{args.exploit.lower()} not in imbedded exploits')
             sys.exit(0)
+
+    if args.version:
+        import pkg_resources
+        version = pkg_resources.require("ActiveDirectoryEnum")[0].version
+        print(f'ActiveDirectoryEnum (ade) version: {version}')
+        sys.exit(0)
 
     if not args.dc:
         print("--dc argument is required")
