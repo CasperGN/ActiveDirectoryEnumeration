@@ -1,5 +1,8 @@
 import ldap3
 from ldap3.core.exceptions import LDAPBindError
+from impacket import smbconnection
+from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSTimeout, NetBIOSError
 import sys
 from termcolor import colored
 
@@ -43,8 +46,14 @@ class Connectors():
         pass
 
 
-    def smb_connector(self):
-        pass
+    def smb_connector(self, server: str, domuser: str, passwd: str) -> smbconnection:
+        try:
+            smbconn = smbconnection.SMBConnection(f'\\\\{server}\\', server, timeout=5)
+            smbconn.login(domuser, passwd)
+        except (SessionError, UnicodeEncodeError, NetBIOSError):
+            smbconn.close()
+            return False
+        return smbconn
 
     
     def ftp_connector(self):
@@ -53,3 +62,4 @@ class Connectors():
 
     def smtp_connector(self):
         pass
+        
