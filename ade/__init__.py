@@ -458,9 +458,9 @@ class EnumAD():
                     availDirs.append(key)
 
         if len(self.smbShareCandidates) == 1:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} share with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         else:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} with {2} subdirectories/file sare browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} shares with {2} subdirectories/file sare browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         if len(self.smbBrowseable.keys()) > 0:
             with open('{0}-open-smb.json'.format(self.server), 'w') as f:
                 json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
