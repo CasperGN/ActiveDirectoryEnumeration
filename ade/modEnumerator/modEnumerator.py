@@ -3,6 +3,8 @@
 import json
 import ldap3
 from ldap3.core.exceptions import LDAPBindError
+from impacket.dcerpc.v5 import epm
+from termcolor import colored
 
 from . .connectors.connectors import Connectors
 
@@ -97,3 +99,31 @@ class ModEnumerator():
                         passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
 
         return passwords
+
+
+    def enumNULLSessions(self, server: str, connector: Connectors):
+        # Test for anonymous binds to ldap
+        try:
+            ldap = connector.ldap_connector(server, False, '', '')
+            print('[ ' + colored('WARN', 'yellow') +' ] Anonymous LDAP bind allowed')
+        except LDAPBindError:
+            print('[ ' + colored('INFO', 'green') +' ] Anonymous LDAP bind not allowed')
+        ldap.unbind()
+
+        # Test for null-session/anonymous session on smb
+        smb = connector.smb_connector(server, '', '')
+        if smb:
+            # It is not False and as such, we got a connection back
+            print('[ ' + colored('WARN', 'yellow') + f' ] Anonymous/NULL SMB connection allowed got ServerOS: {smb.getServerOS()} and HostName: {str(smb.getServerName())}')
+        else:
+            print('[ ' + colored('INFO', 'green') +' ] Anonymous/NULL SMB connection not allowed')
+        smb.logoff()
+
+        # Test for null-session/anonymous session on rpc
+        rpc = connector.rpc_connector(server, '', '')
+        resp = rpc.bind(epm.MSRPC_UUID_PORTMAP)
+        # TODO: Validate by negative test
+        if resp.getData():
+            print('[ ' + colored('WARN', 'yellow') + f' ] Anonymous/NULL RPC connection allowed got following bytes: {resp.getData()} from the connection')
+        else:
+            print('[ ' + colored('INFO', 'green') +' ] Anonymous/NULL RPC connection not allowed')

@@ -8,7 +8,7 @@ from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from getpass import getpass
 from termcolor import colored
 from impacket import smbconnection
-from impacket.dcerpc.v5 import srvs
+from impacket.dcerpc.v5 import srvs, epm
 import contextlib, argparse, sys, socket, json, re, os, base64
 from Cryptodome.Cipher import AES
 from dns.resolver import NXDOMAIN
@@ -90,6 +90,7 @@ class EnumAD():
         else:
             self.runWithoutCreds()
 
+        self.enumNULLSessions()
         self.enumDeleted()
         self.enumerate_names()
         self.checkForPW()
@@ -164,6 +165,10 @@ class EnumAD():
             print('[ ' + colored('INFO', 'green') +' ] Searching for juicy info in deleted users')
             self.enumForCreds(self.deletedUsers)
 
+    
+    def enumNULLSessions(self):
+        self.enumerator.enumNULLSessions(self.server, self.connectors)
+    
 
     def testExploits(self):
         from .exploits import exploits
