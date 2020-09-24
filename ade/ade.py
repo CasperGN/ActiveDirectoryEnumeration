@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
+from ldap3.core.exceptions import LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError
 from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
 from impacket.smbconnection import SessionError
@@ -44,7 +45,7 @@ class EnumAD():
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
-        self.output = output
+        self.output = output if output is not None else domainController
         self.bhout = bhout
         self.kpre = kpre
         self.spnEnum = spnEnum
@@ -64,7 +65,6 @@ class EnumAD():
         self.connectors = Connectors()
         self.enumerator = ModEnumerator()
 
-
         # Setting lists containing elements we want from the domain controller
         self.computers = []
         self.people = []
@@ -76,6 +76,7 @@ class EnumAD():
         self.ous = []
         self.deletedUsers = []
         self.passwd = False
+        self.passwords = {}
         # Holds the values of servers that has been fingerprinted to a particular service
         self.namedServers = {}
 
@@ -680,8 +681,7 @@ class EnumAD():
 
             idx += 1
         if len(possiblePass) > 0:
-            print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties')
-            print('[ ' + colored('INFO', 'green') +' ] Attempting to determine if it is a password')
+            print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties - attempting to determine if it is a password')
 
             for user, password in possiblePass.items():
                 try:
@@ -698,27 +698,33 @@ class EnumAD():
 
 
     def entroPass(self, user, password):
+        test_conn = None
         if not password:
             return None
         # First check if it is a clear text
-        dc_test_conn = Server(self.server, get_info=ALL)
-        test_conn = Connection(dc_test_conn, user=user, password=password)
-        test_conn.bind()
-        # Validate the login (bind) request
-        if int(test_conn.result['result']) != 0:
-            if self.CREDS:
-                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible clear text password'.format(user, password))
+        try:
+            test_conn = self.connectors.ldap_connector(self.server, True, user, password)
+        except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+            try:
+                test_conn = self.connectors.ldap_connector(self.server, False, user, password)
+            except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+                pass
+        if test_conn:
+            # Validate the login (bind) request
+            if int(test_conn.result['result']) != 0:
+                if self.CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible clear text password'.format(user, password))
+                else:
+                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
             else:
-                print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
-        else:
-            if self.CREDS:
-                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property'.format(user, password))
-            else:
-                print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
-                print('')
-                return user, password
-
-        test_conn.unbind()
+                if self.CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property'.format(user, password))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
+                    print('')
+                    return user, password
+            test_conn.unbind()
+            test_conn = None
 
         # Attempt for base64
         # Could be base64, lets try
@@ -728,22 +734,28 @@ class EnumAD():
             return None
     
         # Attempt decoded PW
-        dc_test_conn = Server(self.server, get_info=ALL)
-        test_conn = Connection(dc_test_conn, user=user, password=pw)
-        test_conn.bind()
-        # Validate the login (bind) request
-        if int(test_conn.result['result']) != 0:
-            if self.CREDS:
-                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible base64 decoded password'.format(user, pw))
+        try:
+            test_conn = self.connectors.ldap_connector(self.server, True, user, pw)
+        except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+            try:
+                test_conn = self.connectors.ldap_connector(self.server, False, user, pw)
+            except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+                pass
+        if test_conn:
+            # Validate the login (bind) request
+            if int(test_conn.result['result']) != 0:
+                test_conn.unbind()
+                if self.CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible base64 decoded password'.format(user, pw))
+                else:
+                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
             else:
-                print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
-        else:
-            if self.CREDS:
-                print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property'.format(user, pw))
-            else:
-                print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
-                print('')
-                return user, pw
+                if self.CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property'.format(user, pw))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
+                    print('')
+                    return user, pw
 
 
 
