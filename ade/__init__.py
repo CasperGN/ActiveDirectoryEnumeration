@@ -301,8 +301,7 @@ class EnumAD():
         print('[ .. ] Searching SYSVOL for cpasswords\r')
         cpasswords = {}
         try:
-            smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
-            smbconn.login(self.domuser, self.passwd)
+            smbconn = self.connectors.smb_connector(self.server, self.domuser, self.passwd)
             dirs = smbconn.listShares()
             for share in dirs:
                 if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
@@ -423,8 +422,7 @@ class EnumAD():
                 try:
                     # Changing default timeout as shares should respond withing 5 seconds if there is a share
                     # and ACLs make it available to self.user with self.passwd
-                    smbconn = smbconnection.SMBConnection('\\\\' + str(dnsname), str(dnsname), timeout=5)
-                    smbconn.login(self.domuser, self.passwd)
+                    smbconn = self.connectors.smb_connector(self.server, self.domuser, self.passwd)
                     dirs = smbconn.listShares()
                     self.smbBrowseable[str(dnsname)] = {}
                     for share in dirs:
