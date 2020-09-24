@@ -1,4 +1,6 @@
 exclude ade/__pycache__/*
+recursive-include ade/modEnumerator/*
+recursive-include ade/connectors/*
 recursive-include ade/cve_2020_1472/
 recursive-include ade/exploits/
 include requirements.txt
