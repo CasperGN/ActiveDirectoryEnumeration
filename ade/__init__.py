@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
 from progressbar import Bar, Percentage, ProgressBar, ETA
-from ldap3.core.exceptions import LDAPKeyError
+from ldap3.core.exceptions import LDAPKeyError, LDAPBindError, LDAPSocketOpenError
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from getpass import getpass
@@ -22,7 +22,10 @@ from impacket.krb5.types import KerberosTime, Principal
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
 from binascii import hexlify
-import datetime, random
+import datetime
+import random
+from .modEnumerator.modEnumerator import ModEnumerator
+from .connectors.connectors import Connectors
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
@@ -58,6 +61,10 @@ class EnumAD():
         # At the moment we just want everything
         self.ldapProps = ["*"]
 
+        # Initialize modules
+        self.connectors = Connectors()
+        self.enumerator = ModEnumerator()
+
 
         # Setting lists containing elements we want from the domain controller
         self.computers = []
@@ -70,6 +77,9 @@ class EnumAD():
         self.ous = []
         self.deletedUsers = []
         self.passwd = False
+        self.passwords = {}
+        # Holds the values of servers that has been fingerprinted to a particular service
+        self.namedServers = {}
 
         # TODO: Figure a good way to go through the code dryrun
         if dryrun:
@@ -78,16 +88,18 @@ class EnumAD():
 
         if domuser is not False:
             self.runWithCreds()
-            self.enumDeleted()
         else:
             self.runWithoutCreds()
-            self.enumDeleted()            
+        
+        self.enumDeleted()
+        self.enumerate_names()
+        self.checkForPW()
+        self.checkOS()
+        self.write_file()
 
-        self.testExploits()
-
-        if not self.CREDS:
-            print('[ ' + colored('WARN', 'yellow') +' ] Didn\'t find useable info as anonymous user, please gather credentials and run again')
- 
+        # Unbind the connection to release the handle
+        self.conn.unbind()
+               
 
     def runWithCreds(self):
         self.CREDS = True
@@ -96,12 +108,9 @@ class EnumAD():
         self.bind()
         self.search()
 
-
         if self.output:
             self.write_file()
        
-        self.checkForPW()
-        self.checkOS()
         if self.searchSysvol:
             self.checkSYSVOL()
 
@@ -112,9 +121,7 @@ class EnumAD():
             self.enumKerbPre()
     
         if self.spnEnum:
-            self.enumSPNUsers()
-        
-        self.conn.unbind()
+            self.enumSPNUsers()     
         
         if self.enumsmb:
             # Setting variables for further testing and analysis
@@ -126,6 +133,8 @@ class EnumAD():
         # Lets clear variable now
         self.passwd = None
 
+        return
+
 
     def runWithoutCreds(self):
         self.CREDS = False
@@ -136,18 +145,11 @@ class EnumAD():
 
         self.bind()        
         self.search()
-
-        if self.output:
-            self.write_file()
        
-        self.checkForPW()
-        self.checkOS()
-
         self.enumForCreds(self.people)
-        
+
         return
 
-    
     @contextlib.contextmanager
     def suppressOutput(self):
         with open(os.devnull, 'w') as devnull:
@@ -179,28 +181,13 @@ class EnumAD():
     def bind(self): 
         try:
             if self.ldaps:
-                self.dc_conn = Server(self.server, port=636, use_ssl=True, get_info='ALL')
-                self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
-                self.conn.bind()
-                self.conn.start_tls()
-                # Validate the login (bind) request
-                if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.conn.result['description']))
-                    sys.exit(1)
-                else:
-                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))
+                self.conn = self.connectors.ldap_connector(self.server, True, self.domuser, self.passwd)
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAPS server: {0}'.format(self.server))
             else:
-                self.dc_conn = Server(self.server, get_info=ALL)
-                self.conn = Connection(self.dc_conn, user=self.domuser, password=self.passwd)
-                self.conn.bind()
-                # Validate the login (bind) request
-                if int(self.conn.result['result']) != 0:
-                    print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAP server: {0}'.format(self.conn.result['description']))
-                    sys.exit(1)
-                else:
-                    print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
+                self.conn = self.connectors.ldap_connector(self.server, False, self.domuser, self.passwd)
+                print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
         # TODO: Catch individual exceptions instead
-        except Exception:
+        except (LDAPBindError, LDAPSocketOpenError):
             if self.ldaps:
                 print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
             else:
@@ -262,31 +249,33 @@ class EnumAD():
         for entry in self.conn.entries:
             self.deletedUsers.append(entry)
         print('[ ' + colored('OK', 'green') +' ] Got all deleted users')
+        if len(self.deletedUsers) > 0:
+            print('[ ' + colored('INFO', 'green') +' ] Searching for juicy info in deleted users')
+            self.enumForCreds(self.deletedUsers)
 
-        
+
+    def enumerate_names(self):
+        self.namedServers = self.enumerator.enumerate_server_names(self.computers)
+
 
     '''
         Since it sometimes is real that the property 'userPassword:' is set
         we test for it and dump the passwords
     '''
     def checkForPW(self):
-        passwords = {}
-        idx = 0
-        for _ in self.people:
-            user = json.loads(self.people[idx].entry_to_json())
-            idx += 1    
-            if user['attributes'].get('userPassword') is not None:
-                passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
-        if len(passwords.keys()) > 0:
-            with open('{0}-clearpw'.format(self.server), 'w') as f:
-                json.dump(passwords, f, sort_keys=False) 
+        passwords = self.enumerator.enumerate_for_cleartext_passwords(self.people, self.server)
+        self.passwords = { **passwords, **self.passwords }
 
-        if len(passwords.keys()) == 1:
-            print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(passwords.keys())))
-        elif len(passwords.keys()) == 0:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(passwords.keys())))
+        if len(self.passwords.keys()) > 0:
+            with open(f'{self.output}-clearpw', 'w') as f:
+                json.dump(self.passwords, f, sort_keys=False)
+
+        if len(self.passwords.keys()) == 1:
+            print('[ ' + colored('WARN', 'yellow') +' ] Found {0} clear text password'.format(len(self.passwords.keys())))
+        elif len(self.passwords.keys()) == 0:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text password'.format(len(self.passwords.keys())))
         else:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(passwords.keys())))
+            print('[ ' + colored('OK', 'green') +' ] Found {0} clear text passwords'.format(len(self.passwords.keys())))
 
 
     '''
@@ -296,47 +285,24 @@ class EnumAD():
         enumeration afterwards
     '''
     def checkOS(self):
-
-        os_json = {
-                # Should perhaps include older version
-                "Windows XP": [],
-                "Windows Server 2008": [],
-                "Windows 7": [],
-                "Windows Server 2012": [],
-                "Windows 10": [],
-                "Windows Server 2016": [],
-                "Windows Server 2019": []
-        }
-        idx = 0
-        for _ in self.computers:
-            computer = json.loads(self.computers[idx].entry_to_json())
-            idx += 1    
-
-            for os_version in os_json.keys():
-                try:
-                    if os_version in computer['attributes'].get('operatingSystem'):
-                        os_json[os_version].append(computer['attributes']['dNSHostName'])
-                except TypeError:
-                    # computer['attributes'].get('operatingSystem') is of NoneType, just continue
-                    continue
+        os_json = self.enumerator.enumerate_os_version(self.computers)
 
         for key, value in os_json.items():
             if len(value) == 0:
                 continue
-            with open('{0}-oldest-OS'.format(self.server), 'w') as f:
+            with open(f'{self.output}-oldest-OS', 'w') as f:
                 for item in value:
                     f.write('{0}: {1}\n'.format(key, item))
                 break
 
-        print('[ ' + colored('OK', 'green') + ' ] Wrote hosts with oldest OS to {0}-oldest-OS'.format(self.server))
+        print('[ ' + colored('OK', 'green') + f' ] Wrote hosts with oldest OS to {self.output}-oldest-OS')
     
 
     def checkSYSVOL(self):
         print('[ .. ] Searching SYSVOL for cpasswords\r')
         cpasswords = {}
         try:
-            smbconn = smbconnection.SMBConnection('\\\\{0}\\'.format(self.server), self.server, timeout=5)
-            smbconn.login(self.domuser, self.passwd)
+            smbconn = self.connectors.smb_connector(self.server, self.domuser, self.passwd)
             dirs = smbconn.listShares()
             for share in dirs:
                 if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
@@ -457,8 +423,7 @@ class EnumAD():
                 try:
                     # Changing default timeout as shares should respond withing 5 seconds if there is a share
                     # and ACLs make it available to self.user with self.passwd
-                    smbconn = smbconnection.SMBConnection('\\\\' + str(dnsname), str(dnsname), timeout=5)
-                    smbconn.login(self.domuser, self.passwd)
+                    smbconn = self.connectors.smb_connector(self.server, self.domuser, self.passwd)
                     dirs = smbconn.listShares()
                     self.smbBrowseable[str(dnsname)] = {}
                     for share in dirs:
@@ -494,9 +459,9 @@ class EnumAD():
                     availDirs.append(key)
 
         if len(self.smbShareCandidates) == 1:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} share with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         else:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} with {2} subdirectories/files are browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} shares with {2} subdirectories/file sare browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
         if len(self.smbBrowseable.keys()) > 0:
             with open('{0}-open-smb.json'.format(self.server), 'w') as f:
                 json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
@@ -729,6 +694,7 @@ class EnumAD():
             if not self.CREDS:
                 self.domuser = usr
                 self.passwd = passwd
+                self.passwords[usr] = passwd
                 self.runWithCreds()
                 return
 
@@ -796,8 +762,9 @@ def main(args):
         /*----------------------------------------------------------------------------------------------------------*/
 
                 '''))
+
     parser.add_argument('--dc', type=str, help='Hostname of the Domain Controller')
-    parser.add_argument('-o', '--out-file', type=str, help='Path to output file. If no path, CWD is assumed (default: None)')
+    parser.add_argument('-o', '--out-file', type=str, help='Name prefix of output files (default: the name of the dc)')
     parser.add_argument('-u', '--user', type=str, help='Username of the domain user to query with. The username has to be domain name as `user@domain.org`')
     parser.add_argument('-s', '--secure', help='Try to estalish connection through LDAPS', action='store_true')
     parser.add_argument('-smb', '--smb', help='Force enumeration of SMB shares on all computer objects fetched', action='store_true')
@@ -857,9 +824,7 @@ def main(args):
 
 
     # Boolean flow control flags
-    file_to_write = None
-    if args.out_file:
-        file_to_write = args.out_file
+    file_to_write = args.out_file if args.out_file else f'{args.dc}'
 
     enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.dry_run, args.user)
 
