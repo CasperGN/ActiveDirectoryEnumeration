@@ -51,5 +51,9 @@ class Kerberoast():
 
             except KerberosError as err:
                 print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
+                return None
+        except KerberosError as err:
+                print('[ ' + colored('ERROR', 'red') +' ] Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
+                return None
 
-            return user_tickets
+        return user_tickets
