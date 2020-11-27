@@ -1,4 +1,4 @@
-cffi==1.14.3
+cffi==1.14.4
 Click==7.1.2
 cryptography==3.2.1
 dnspython==2.0.0
