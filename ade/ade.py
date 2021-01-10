@@ -311,9 +311,6 @@ class EnumAD():
             print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpasswords in GPOs on SYSVOL share'.format(len(cpasswords.keys())))
 
 
-        
-
-
     def splitJsonArr(self, arr):
         if isinstance(arr, list):
             if len(arr) == 1:
@@ -720,6 +717,7 @@ def main(args):
         args.bloodhound = True
         args.spn = True
         args.exploits = True
+        args.sysvol = True
     if args.no_creds:
         args.user = False
     else:
