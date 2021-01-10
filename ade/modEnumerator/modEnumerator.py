@@ -6,13 +6,13 @@ import re
 import base64
 import os
 import socket
+import concurrent.futures
 from ldap3.core.exceptions import LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError
 from impacket.dcerpc.v5 import epm
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from termcolor import colored
 from Cryptodome.Cipher import AES
-from progressbar import Bar, Percentage, ProgressBar, ETA
 
 from . .connectors.connectors import Connectors
 from . .utils.utils import Utils
@@ -196,42 +196,45 @@ class ModEnumerator():
 
 
     def enumSMB(self, connector: Connectors, smbShareCandidates: list, server: str, domuser: str, passwd: str) -> dict:
-        progBar = ProgressBar(widgets=['SMBConnection test: ', Percentage(), Bar(), ETA()], maxval=len(smbShareCandidates)).start()
+        self.connector = connector
+        self.server = server
+        self.domuser = domuser
+        self.passwd = passwd
         smbBrowseable = {}
-        prog = 0
         try:
-            for dnsname in smbShareCandidates:
-                try:
-                    # Changing default timeout as shares should respond withing 5 seconds if there is a share
-                    # and ACLs make it available to self.user with self.passwd
-                    smbconn = connector.smb_connector(server, domuser, passwd)
-                    dirs = smbconn.listShares()
-                    smbBrowseable[str(dnsname)] = {}
-                    for share in dirs:
-                        smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
-                        try:
-                            _ = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
-                            smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
-                        except (SessionError, UnicodeEncodeError, NetBIOSError):
-                            # Didnt have permission, all good
-                            # Im second guessing the below adding to the JSON file as we're only interested in the listable directories really
-                            #self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
-                            continue
-                    smbconn.logoff()
-                    progBar.update(prog + 1)
-                    prog += 1
-                except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError):
-                    # TODO: Examine why we sometimes get:
-                    # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
-                    # on healthy shares. It seems to be reported with CIF shares 
-                    progBar.update(prog + 1)
-                    prog += 1
-                    continue
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(smbShareCandidates)) as executor:
+                worker = executor.map(self.enumShare, [share for share in smbShareCandidates])
+                for result in worker:
+                    smbBrowseable = { **smbBrowseable, **result }
         except ValueError:
-            # We reached end of progressbar, continue since we finish below
             pass
-        progBar.finish()
-        print('')
+        return smbBrowseable
+
+
+    def enumShare(self, dnsname):
+        smbBrowseable = {}
+        try:
+            # Changing default timeout as shares should respond withing 5 seconds if there is a share
+            # and ACLs make it available to self.user with self.passwd
+            smbconn = self.connector.smb_connector(self.server, self.domuser, self.passwd)
+            dirs = smbconn.listShares()
+            smbBrowseable[str(dnsname)] = {}
+            for share in dirs:
+                smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
+                try:
+                    _ = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                    smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
+                except (SessionError, UnicodeEncodeError, NetBIOSError):
+                    # Didnt have permission, all good
+                    # Im second guessing the below adding to the JSON file as we're only interested in the listable directories really
+                    #self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
+                    continue
+            smbconn.logoff()
+        except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError):
+            # TODO: Examine why we sometimes get:
+            # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
+            # on healthy shares. It seems to be reported with CIF shares 
+            return smbBrowseable
         return smbBrowseable
 
 
