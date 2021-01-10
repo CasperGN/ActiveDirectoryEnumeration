@@ -7,7 +7,6 @@ def test_ade_imports():
     import sys
     import re
     import ldap3
-    import progressbar
     import ldap3
     import impacket
     import getpass
