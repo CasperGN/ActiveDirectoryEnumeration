@@ -347,7 +347,8 @@ class EnumAD():
     def sortComputers(self):
         for computer in self.computers:
             try:
-                self.smbShareCandidates.append(computer['dNSHostName'])
+                if computer['dNSHostName'] not in self.smbShareCandidates:
+                    self.smbShareCandidates.append(computer['dNSHostName']) 
             except LDAPKeyError:
                 # No dnsname registered
                 continue
@@ -437,7 +438,6 @@ class EnumAD():
         if advance:
             self.domuser = str(list(self.passwords.keys())[0])
             self.passwd = str(self.passwords[self.domuser])
-            print(self.domuser, self.passwd)
             self.runWithCreds()
             return
 
