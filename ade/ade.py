@@ -769,6 +769,7 @@ def main(args):
         args.kerberos_preauth = True
         args.bloodhound = True
         args.spn = True
+        args.exploits = True
     if args.no_creds:
         args.user = False
     else:
