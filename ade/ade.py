@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES, LEVEL, SUBTREE, ALL_OPERATIONAL_ATTRIBUTES
 from ldap3.core.exceptions import LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError
-from progressbar import Bar, Percentage, ProgressBar, ETA
 from ldap3.core.exceptions import LDAPKeyError
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
