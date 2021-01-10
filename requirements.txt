@@ -10,7 +10,6 @@ Jinja2==2.11.2
 ldap3==2.8.1
 ldapdomaindump==0.9.3
 MarkupSafe==1.1.1
-progressbar==2.5
 pyasn1==0.4.8
 pycparser==2.20
 pycryptodomex==3.9.8
