@@ -1,6 +1,6 @@
 cffi==1.14.5
 Click==7.1.2
-cryptography==3.4.4
+cryptography==3.4.5
 dnspython==2.1.0
 Flask==1.1.2
 future==0.18.2
