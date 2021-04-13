@@ -37,7 +37,7 @@ optional arguments:
 
 ```
 
-The new inclusion of imbedded exploits can yield results such as:
+The new inclusion of embedded exploits can yield results such as:
 ```
 ...
 [ WARN ] DC may be vulnerable to: [ cve-2020-1472 ]
@@ -75,10 +75,10 @@ pacman -S activedirectoryenum
 
 ## Collaboration
 
-While this project is developed to fit my need, any collaboration is appriciated. Please feel free to fork the project, make changes according to the License agreements and make a Pull Request.
+While this project is developed to fit my needs, any collaboration is appreciated. Please feel free to fork the project, make changes according to the License agreements and make a Pull Request.
 I only ask that:
-- Keep equivilent naming standard as the base project
-- Keep equivilent syntaxing
+- Keep equivalent naming standard as the base project
+- Keep equivalent syntaxing
 - Test your code
 - Error handling is incorporated
 - Document the feature - both in code but also for potential Wiki page
