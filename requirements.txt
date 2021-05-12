@@ -17,5 +17,5 @@ pycryptodomex==3.10.1
 pyOpenSSL==20.0.1
 six==1.15.0
 termcolor==1.1.0
-Werkzeug==1.0.1
+Werkzeug==2.0.0
 bloodhound==1.0.5
