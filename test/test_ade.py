@@ -1,4 +1,4 @@
-import ade
+from ade import ade
 import pytest
 import ldap3
 import contextlib
@@ -11,7 +11,7 @@ def test_enumAD_runWithoutCreds():
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         with pytest.raises(SystemExit) as ldaperr:
-            adeEnum = ade.EnumAD('domain.local', True, False, False, False, False, False, False, True)
+            adeEnum = ade.EnumAD('domain.local', True, False, False, False, False, False, False, True, False, False)
             adeEnum.runWithoutCreds()
         assert "ERROR" in out.getvalue()
         assert "Failed to bind to LDAPS server: " in out.getvalue()

@@ -1,4 +1,5 @@
 # LDAP connection
+import ssl
 import ldap3
 from ldap3.core.exceptions import LDAPBindError
 # SMB connection
@@ -28,13 +29,15 @@ class Connectors():
 
         '''
         if ldaps:
-            dc_conn = ldap3.Server(server, port=636, use_ssl=True, get_info=level)
+            dc_conn = ldap3.Server(server, port=636, use_ssl=True, get_info=level, tls=ldap3.Tls(validate=ssl.CERT_NONE))
             conn = ldap3.Connection(dc_conn, user=domuser, password=passwd)
             conn.bind()
+            print(conn)
             conn.start_tls()
             # Validate the login (bind) request
-            if int(conn.result['result']) != 0:
-                raise LDAPBindError
+            #if int(conn.result['result']) != 0:
+
+                #raise LDAPBindError
         else:
             dc_conn = ldap3.Server(server, get_info=level)
             conn = ldap3.Connection(dc_conn, user=domuser, password=passwd)

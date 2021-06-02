@@ -1,13 +1,12 @@
 
 def test_ade_imports():
-    import ade
+    from ade import ade
     import termcolor
     import argparse
     import textwrap
     import sys
     import re
     import ldap3
-    import progressbar
     import ldap3
     import impacket
     import getpass
