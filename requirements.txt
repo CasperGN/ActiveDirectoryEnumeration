@@ -18,4 +18,4 @@ pyOpenSSL==21.0.0
 six==1.16.0
 termcolor==1.1.0
 Werkzeug==2.0.2
-bloodhound==1.1.1
+bloodhound==1.2.1
