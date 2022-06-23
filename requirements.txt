@@ -4,7 +4,7 @@ cryptography==36.0.1
 dnspython==2.2.1
 Flask==2.0.3
 future==0.18.2
-impacket==0.9.24
+impacket==0.10.0
 itsdangerous==2.1.2
 Jinja2==3.1.2
 ldap3==2.9.1
@@ -14,7 +14,7 @@ progressbar==2.5
 pyasn1==0.4.8
 pycparser==2.21
 pycryptodomex==3.13.0
-pyOpenSSL==21.0.0
+pyOpenSSL==22.0.0
 six==1.16.0
 termcolor==1.1.0
 Werkzeug==2.1.2
