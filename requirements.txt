@@ -16,6 +16,6 @@ pycparser==2.21
 pycryptodomex==3.15.0
 pyOpenSSL==22.0.0
 six==1.16.0
-termcolor==1.1.0
+termcolor==2.3.0
 Werkzeug==2.2.3
 bloodhound==1.6.1
