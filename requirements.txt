@@ -14,7 +14,7 @@ progressbar==2.5
 pyasn1==0.4.8
 pycparser==2.21
 pycryptodomex==3.19.1
-pyOpenSSL==22.0.0
+pyOpenSSL==25.0.0
 six==1.16.0
 termcolor==2.3.0
 Werkzeug==3.0.6
