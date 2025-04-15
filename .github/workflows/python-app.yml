@@ -14,12 +14,17 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        python_ver: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v2
+    - name: Set up Python ${{ matrix.python_ver }}
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.8
+        python-version: ${{ matrix.python_ver }}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
